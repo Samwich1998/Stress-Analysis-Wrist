@@ -433,7 +433,7 @@ class signalProcessing:
             pars.update(gauss5.make_params())
             pars['g5_amplitude'].set(value = peakAmp[3]/6, min = 0, max = peakAmp[3]/2)
             pars['g5_fwtm'].set(value = x[-1] - peakCenter[3], min = 0, max = x[-1] - peakCenter[2])
-            pars['g5_center'].set(value = peakCenter[3]*1.01, min = peakCenter[2] + (peakCenter[2] - peakCenter[1]), max = x[-1])
+            pars['g5_center'].set(value = min(peakCenter[3]*1.01, x[-1]), min = min(peakCenter[2] + (peakCenter[2] - peakCenter[1]), peakCenter[3]*1.01, x[-1]*.99), max = x[-1])
             mod += gauss5
         
         # Get Fit Information

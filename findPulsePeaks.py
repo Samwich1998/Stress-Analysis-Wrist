@@ -59,13 +59,7 @@ if __name__ == "__main__":
     # ---------------------------------------------------------------------- #
     #                   Extract Pulse Peak Data from Signals                 #
     # ---------------------------------------------------------------------- #
-    
-        
-    testDataExcelFile = "./Input Data/Test_Data/before exercise & food 2.xls" # Path to the Excel Data ('.xls' or '.xlsx')
-    testDataExcelFile = "./Input Data/Test_Data/Right_05.xls" # Path to the Excel Data ('.xls' or '.xlsx')
-    testDataExcelFile = "./Input Data/Test_Data/Left_05.xls" # Path to the Excel Data ('.xls' or '.xlsx')
 
-    
     # Read Data from Excel
     excelData = excelProcessing.excelProcessing()
     time, signalData = excelData.getData(testDataExcelFile, testSheetNum)
