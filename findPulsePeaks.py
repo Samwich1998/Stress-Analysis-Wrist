@@ -47,7 +47,7 @@ if __name__ == "__main__":
     # ---------------------------------------------------------------------- #
     
     # Specify the Location of the Input Data (Excel File: .XLSX or .XLS)
-    testDataExcelFile = "./Input Data/Test_Data/before exercise & food 1.xls" # Path to the Excel Data ('.xls' or '.xlsx')
+    testDataExcelFile = "./Input Data/Test_Data/Hard_12.xls" # Path to the Excel Data ('.xls' or '.xlsx')
     testSheetNum = 0 # The Sheet/Tab Order (Zeroth/First/Second/Third) on the Bottom of the Excel Document
       
     # Saves the Data Analysis: Peak Features for Each Well-Shaped Pulse
@@ -71,7 +71,7 @@ if __name__ == "__main__":
     
     # Seperate Pulses and Perform Indivisual Analysis
     dataProcessing = peakAnalysis.signalProcessing()
-    bloodPulse = dataProcessing.sepPulseAnalyze(time, signalData)
+    bloodPulse = dataProcessing.sepPulseAnalyze(time, signalData, minBPM = 30, maxBPM = 220, plotSeperation = True, plotGaussFit = True)
     
     # Plot a Specific Pulse
     plotPulse = False
