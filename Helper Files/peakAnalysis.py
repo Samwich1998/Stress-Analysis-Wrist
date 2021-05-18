@@ -1,7 +1,7 @@
 
 # Basic Modules
+import sys
 import math
-import heapq
 import numpy as np
 # Data Smoothing and First Derivative
 from scipy.signal import savgol_filter
@@ -16,7 +16,6 @@ from sklearn.metrics import r2_score
 # Matlab Plotting API
 import matplotlib as mpl
 import matplotlib.pyplot as plt
-  
 
 class plot:
     
@@ -128,6 +127,8 @@ class signalProcessing:
     def __init__(self):
         # Indivisial Pulse Information
         self.bloodPulse = {}      # Holder for Each Indivisual Pulse Data
+        # Average Blood Pulses
+        self.medPulse = {}
         # Saving Final pulseNums: Well-Shaped Pulses for Machine Learning
         self.goodPulseNums = []
     
@@ -492,6 +493,8 @@ class signalProcessing:
             # If We Previously Missed the Tidal Wave, Use the Gaussian's Tidal Wave Index
             if not self.bloodPulse[pulseNum]["finalInd"][2]:
                 self.bloodPulse[pulseNum]["finalInd"][2] = self.bloodPulse[pulseNum]["finalIndGauss"][2]
+            # Add Saving Details to the Pulse Info
+            self.formatSavingPulse(pulseNum)
         # If Bad, Try and Add an Extra Gaussian to the Tail
         elif not addExtraGauss:
             self.gausDecomp(pulseNum, plotGaussFit, addExtraGauss = True)
@@ -522,6 +525,72 @@ class signalProcessing:
             plt.legend(loc='best')
             plt.title("Gaussian Decomposition of Pulse Number " + str(pulseNum))
             plt.show()
+    
+    def formatSavingPulse(self, pulseNum):
+        # Initialize Data
+        pulseInfo = self.bloodPulse[pulseNum]
+        # Initialize Excel Row: Starting with pulseNum and Initial Time (T0) of the Pulse
+        row = [pulseNum, pulseInfo['time'][0], pulseInfo['time'][-1]]
+        # Add the Time Differences Between the Pulse Peaks
+        finalInd = pulseInfo['finalInd']
+        finalPeakLoc = pulseInfo['time'][finalInd.astype(int)]
+        finalTimeDiff = np.diff(finalPeakLoc)
+        row.extend(finalTimeDiff)
+        # Add the Peak Amplitudes
+        for peakInd in finalInd[1:-1]:
+            row.append(pulseInfo["smoothData"][peakInd])
+        # Check to Make Sure Data is All There
+        if len(finalTimeDiff) != 5:
+            print("Error in Recording Data in Pulse Number", pulseNum)
+            sys.exit()
+            
+        # Add Gaussian Data
+        row.append("")
+        # Add the Time Differences Between the Gaussian Pulse Peaks
+        finalIndGauss = pulseInfo['finalIndGauss']
+        finalPeakLocGauss = pulseInfo['time'][finalIndGauss.astype(int)]
+        finalTimeDiffGauss = np.diff(finalPeakLocGauss)
+        row.extend(finalTimeDiffGauss)
+        # Add the Peak Amplitudes
+        row.extend(pulseInfo["finalAmpGauss"])
+        # Save Results
+        self.bloodPulse[pulseNum]["Results to Save"] = row
+
+    def combinePulses(self, pulsePerInterval):
+        
+        medPulseNum = 1; groupPulses = [[]];
+        for pulseNum in self.goodPulseNums:
+            startTime =  self.bloodPulse[pulseNum]['time'][0]
+            
+            if startTime < pulsePerInterval*medPulseNum:
+                groupPulses[-1].append(pulseNum)
+            elif startTime < pulsePerInterval*(medPulseNum+1):
+                groupPulses.append([pulseNum])
+                medPulseNum += 1
+            else:
+                groupPulses.append([])
+                medPulseNum += 1
+                
+        for groupInd, combiningPulses in enumerate(groupPulses):
+            groupInd += 1
+            newResult = []
+            # Get All the Pulses in the Interval
+            for combiningPulse in combiningPulses:
+                row = self.bloodPulse[combiningPulse]["Results to Save"]
+                row[12] = 0
+                newResult.append(row)
+            # Take the Median of All the Pulse Data
+            newResult = list(np.median(newResult, axis=0))
+            # Change PulseNum/Start/End Times
+            newResult[0] = groupInd
+            newResult[1] = (groupInd-1)*pulsePerInterval
+            newResult[2] = groupInd*pulsePerInterval
+            newResult[12] = ""
+            # Save the New Data
+            self.medPulse[groupInd] = {}
+            self.medPulse[groupInd]["Results to Save"] = newResult
+        return self.medPulse, list(range(1, len(groupPulses) + 1))
+            
 
 
 

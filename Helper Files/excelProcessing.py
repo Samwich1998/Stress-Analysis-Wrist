@@ -117,7 +117,7 @@ class excelProcessing:
             WB_worksheet = WB.create_sheet(sheetName)
         
         # Label First Row
-        header = ["Pulse Number", "Start Time", 'Systolic Time From Start', 'Tidal Wave Time From Systolic', 'Dicrotic Time From Tidal Wave',
+        header = ["Pulse Number", "Start Time", "End Time", 'Systolic Time From Start', 'Tidal Wave Time From Systolic', 'Dicrotic Time From Tidal Wave',
                   'Tail Wave Time From Dicrotic', 'End Time From Tail Wave', 'Systolic Peak Amplitude', 'Tidal Wave Peak Ampltiude',
                   "Dicrotic Peak Amplitude", 'Tail Wave Peak Ampltitude']
         header.extend(["", 'Gaussian Systolic Time From Start', 'Gaussian Tidal Wave Time From Systolic', 'Gaussian Dicrotic Time From Tidal Wave',
@@ -127,35 +127,8 @@ class excelProcessing:
         
         # Save Data to Worksheet
         for pulseNum in pulseNumSaving:
-            # Initialize Data
-            pulseInfo = bloodPulse[pulseNum]
-            # Initialize Excel Row: Starting with pulseNum and Initial Time (T0) of the Pulse
-            row = [pulseNum, pulseInfo['time'][0]]
-            # Add the Time Differences Between the Pulse Peaks
-            finalInd = pulseInfo['finalInd']
-            finalPeakLoc = pulseInfo['time'][finalInd.astype(int)]
-            finalTimeDiff = np.diff(finalPeakLoc)
-            row.extend(finalTimeDiff)
-            # Add the Peak Amplitudes
-            for peakInd in finalInd[1:-1]:
-                row.append(pulseInfo["smoothData"][peakInd])
-            # Check to Make Sure Data is All There
-            if len(finalTimeDiff) != 5:
-                print("Error in Recording Data in Pulse Number", pulseNum)
-                sys.exit()
-                
-            # Add Gaussian Data
-            row.append("")
-            # Add the Time Differences Between the Gaussian Pulse Peaks
-            finalIndGauss = pulseInfo['finalIndGauss']
-            finalPeakLocGauss = pulseInfo['time'][finalIndGauss.astype(int)]
-            finalTimeDiffGauss = np.diff(finalPeakLocGauss)
-            row.extend(finalTimeDiffGauss)
-            # Add the Peak Amplitudes
-            row.extend(pulseInfo["finalAmpGauss"])
-            
             # Write the Data to Excel
-            WB_worksheet.append(row)
+            WB_worksheet.append(bloodPulse[pulseNum]["Results to Save"])
         
         # Center the Data in the Cells
         align = Alignment(horizontal='center',vertical='center',wrap_text=True)        

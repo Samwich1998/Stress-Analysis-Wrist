@@ -47,9 +47,17 @@ if __name__ == "__main__":
     # ---------------------------------------------------------------------- #
     
     # Specify the Location of the Input Data (Excel File: .XLSX or .XLS)
-    testDataExcelFile = "./Input Data/Test_Data/Hard_12.xls" # Path to the Excel Data ('.xls' or '.xlsx')
+    testDataExcelFile = "./Input Data/Test_Data/Left_05.xls" # Path to the Excel Data ('.xls' or '.xlsx')
     testSheetNum = 0 # The Sheet/Tab Order (Zeroth/First/Second/Third) on the Bottom of the Excel Document
-      
+    
+    # Optional Parameters
+    plotSeperation = False
+    plotGaussFit = False
+    
+    # Take the Average of Pulse Features in a Certain Time Frame
+    combinePulses = True # Reduce Signal Features to One Feature Per pulsePerInterval
+    pulsePerInterval = 5 # The Number of Seconds for Each Signal. Ex: [0, 4.99999] for pulsePerInterval = 5
+    
     # Saves the Data Analysis: Peak Features for Each Well-Shaped Pulse
     saveInputData = True   
     if saveInputData:
@@ -71,7 +79,14 @@ if __name__ == "__main__":
     
     # Seperate Pulses and Perform Indivisual Analysis
     dataProcessing = peakAnalysis.signalProcessing()
-    bloodPulse = dataProcessing.sepPulseAnalyze(time, signalData, minBPM = 30, maxBPM = 220, plotSeperation = True, plotGaussFit = True)
+    bloodPulse = dataProcessing.sepPulseAnalyze(time, signalData, minBPM = 30, maxBPM = 220, 
+                                plotSeperation = plotSeperation, plotGaussFit = plotGaussFit)
+    
+    if combinePulses:
+        savingDict, savingPulseInd = dataProcessing.combinePulses(pulsePerInterval)
+    else:
+        savingDict = bloodPulse
+        savingPulseInd = dataProcessing.goodPulseNums
     
     # Plot a Specific Pulse
     plotPulse = False
@@ -90,13 +105,13 @@ if __name__ == "__main__":
     # Save Pulse Labels (if Desired)
     if saveInputData:
         saveExcelName = os.path.basename(testDataExcelFile).split(".")[0] + ".xlsx"
-        excelData.saveResults(bloodPulse, dataProcessing.goodPulseNums, saveDataFolder, saveExcelName, sheetName)
+        excelData.saveResults(savingDict, savingPulseInd, saveDataFolder, saveExcelName, sheetName)
     
     
     # ---------------------------------------------------------------------- #
     #                    Extract Body Parameters from Signals                #
     # ---------------------------------------------------------------------- #
-    # Not Fully Developed Yet, But Can be Useful in the Future
+    # Not Fully Developed Yet (Accuracy NOT Tested), But Can be Useful in the Future
     getBodyParam = False
     if getBodyParam:
         import numpy as np
