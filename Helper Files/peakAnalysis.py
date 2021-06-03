@@ -222,10 +222,7 @@ class signalProcessing:
         Use Case: Seperate the Pulses, Label Peaks, Gaussian Decompositions, Return Information
         ----------------------------------------------------------------------
         """        
-<<<<<<< HEAD
         print("\nSeperating Pulse Data")
-=======
->>>>>>> 472558c297b0e91e1865a189e65dcf681fce0d4e
         # Smoothen Out the Data to Eliminate Small Peaks
         smoothData = savgol_filter(signalData, 5, 3)
         
@@ -265,10 +262,7 @@ class signalProcessing:
             plt.legend(loc=9, bbox_to_anchor=(1.35, 1)); plt.show();
             plt.show()
         
-<<<<<<< HEAD
         print("Analyzing Pulses")
-=======
->>>>>>> 472558c297b0e91e1865a189e65dcf681fce0d4e
         # Seperate Peaks Based on the Minimim Before the R-Peak Rise
         pulseStartInd = self.findLeftMinimum(smoothData, risingPeaks[0])
         for pulseNum in range(1, len(risingPeaks) - 1):
@@ -460,11 +454,7 @@ class signalProcessing:
         # Tail Wave Model
         gauss4 = Model(self.gaussModel, prefix = "g4_")
         pars.update(gauss4.make_params())
-<<<<<<< HEAD
         pars['g4_center'].set(value = peakCenter[3], min = min(peakCenter[2] + 0.5*(peakCenter[2]- peakCenter[1]), peakCenter[3]), max = min(peakCenter[3]*1.1, x[-1]))
-=======
-        pars['g4_center'].set(value = peakCenter[3], min = peakCenter[2] + 0.5*(peakCenter[2]- peakCenter[1]), max = min(peakCenter[3]*1.1, x[-1]))
->>>>>>> 472558c297b0e91e1865a189e65dcf681fce0d4e
         pars['g4_fwtm'].set(value = x[-1] - peakCenter[3], min = minWidth, max = x[-1] - peakCenter[1])
         pars['g4_amplitude'].set(value = peakAmp[3], min = peakAmp[3]*.8, max = peakAmp[3]*1.2)
         
@@ -491,16 +481,10 @@ class signalProcessing:
         # Statistics for Fit
         errorSQ = finalFitInfo.residual[2:-2]**2  # Ignore First/Last 2 Points (Bad EndPoint Fit Given Smoothing)
         meanErrorSQ = np.mean(errorSQ)
-<<<<<<< HEAD
         #print(rSquared1, rSquared2, coefficient_of_dermination, meanErrorSQ)
         
         # Only Take Pulses with a Good Fit
         if rSquared1 > 0.98 and rSquared2 > 0.98 and coefficient_of_dermination > 0.98 and meanErrorSQ < 1E-2:
-=======
-        
-        # Only Take Pulses with a Good Fit
-        if rSquared1 > 0.98 and rSquared2 > 0.98 and coefficient_of_dermination > 0.98 and meanErrorSQ < 5E-4:
->>>>>>> 472558c297b0e91e1865a189e65dcf681fce0d4e
             # Keep Track of Good Pules
             self.goodPulseNums.append(pulseNum)
             # Extract Data From Gaussian's in Fit to Save
@@ -599,7 +583,6 @@ class signalProcessing:
                 row[12] = 0
                 newResult.append(row)
             # Take the Median of All the Pulse Data
-<<<<<<< HEAD
             if newResult:
                 newResult = list(np.median(newResult, axis=0))
                 # Change PulseNum/Start/End Times
@@ -611,18 +594,6 @@ class signalProcessing:
                 self.medPulse[groupInd] = {}
                 self.medPulse[groupInd]["Results to Save"] = newResult
         return self.medPulse, list(self.medPulse.keys())
-=======
-            newResult = list(np.median(newResult, axis=0))
-            # Change PulseNum/Start/End Times
-            newResult[0] = groupInd
-            newResult[1] = (groupInd-1)*pulsePerInterval
-            newResult[2] = groupInd*pulsePerInterval
-            newResult[12] = ""
-            # Save the New Data
-            self.medPulse[groupInd] = {}
-            self.medPulse[groupInd]["Results to Save"] = newResult
-        return self.medPulse, list(range(1, len(groupPulses) + 1))
->>>>>>> 472558c297b0e91e1865a189e65dcf681fce0d4e
             
 
 
