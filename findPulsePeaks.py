@@ -51,8 +51,8 @@ if __name__ == "__main__":
     testSheetNum = 0 # The Sheet/Tab Order (Zeroth/First/Second/Third) on the Bottom of the Excel Document
     
     # Optional Parameters
-    plotSeperation = False
-    plotGaussFit = False
+    plotSeperation = True
+    plotGaussFit = True
     
     # Take the Average of Pulse Features in a Certain Time Frame
     combinePulses = False # Reduce Signal Features to One Feature Per pulsePerInterval
