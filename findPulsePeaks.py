@@ -49,7 +49,7 @@ if __name__ == "__main__":
     pulseExcelFile = "./Input Data/Pulse Data/Changhao 0528/5-Recover_Changhao_20210528.xls" # Path to the Excel Data ('.xls' or '.xlsx')
     gsrFile = "./Input Data/Galvanic Skin Response Data/20210525 cold gsr_ehsan.txt"   # Path to the GSR Data ('.txt', '.csv', 'xlsx')
     # Specify Which Program to Run: Eventually We Will do Both Together
-    analyzePulse = True
+    analyzePulse = False
     analyzeGSR = True
     
     # Optional Parameters for the Pulse Data
