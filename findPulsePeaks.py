@@ -124,14 +124,14 @@ if __name__ == "__main__":
     
     
     # ---------------------------------------------------------------------- #
-    #                   Extract Pulse Peak Data from Signals                 #
+    #                         Analyze GSR Data                               #
     # ---------------------------------------------------------------------- #
     
     if analyzeGSR:
         # Read Data from Excel
         excelDataGSR = excelProcessing.processGSRData()
         timeGSR, currentGSR = excelDataGSR.getData(gsrFile, testSheetNum = 0)
-        currentGSR = currentGSR*10**6 # Get Data into micro-Farad
+        currentGSR = currentGSR*10**6 # Get Data into micro-Ampes
         
         # Plot the Initial Input Data
         plot = gsrAnalysis.plot()
