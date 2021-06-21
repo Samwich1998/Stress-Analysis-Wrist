@@ -23,6 +23,7 @@
         %pip install peakutils
         %pip install lmfit
         %pip install findpeaks
+        %pip install scikit-image
         
     --------------------------------------------------------------------------
 """
@@ -31,13 +32,11 @@
 # Basic Modules
 import os
 import sys
-# Extra Options to Extract Signal Information
-import heartpy as hp
-import neurokit2 as nk
 # Import Python Helper Files (And Their Location)
 sys.path.append('./Helper Files/')  # Folder with All the Helper Files
 import excelProcessing
-import peakAnalysis
+import pulseAnalysis
+import gsrAnalysis
 
 
 
@@ -46,68 +45,115 @@ if __name__ == "__main__":
     #    User Parameters to Edit (More Complex Edits are Inside the Files)   #
     # ---------------------------------------------------------------------- #
     
-    # Specify the Location of the Input Data (Excel File: .XLSX or .XLS)
-    testDataExcelFile = "./Input Data/Changhao 0528/1-Rest_Changhao_20210528.xls" # Path to the Excel Data ('.xls' or '.xlsx')
-    testSheetNum = 0 # The Sheet/Tab Order (Zeroth/First/Second/Third) on the Bottom of the Excel Document
+    # Specify the Location of the Input Data
+    pulseExcelFile = "./Input Data/Pulse Data/Changhao 0528/5-Recover_Changhao_20210528.xls" # Path to the Excel Data ('.xls' or '.xlsx')
+    gsrFile = "./Input Data/Galvanic Skin Response Data/20210525 cold gsr_ehsan.txt"   # Path to the GSR Data ('.txt', '.csv', 'xlsx')
+    # Specify Which Program to Run: Eventually We Will do Both Together
+    analyzePulse = True
+    analyzeGSR = True
     
-    # Optional Parameters
-    plotSeperation = True
-    plotGaussFit = True
+    # Optional Parameters for the Pulse Data
+    plotSeperation = False
+    plotGaussFit = False
     
     # Take the Average of Pulse Features in a Certain Time Frame
     combinePulses = False # Reduce Signal Features to One Feature Per pulsePerInterval
-    pulsePerInterval = 3 # The Number of Seconds for Each Signal. Ex: [0, 4.99999] for pulsePerInterval = 5
+    pulsePerInterval = 3  # The Number of Seconds for Each Signal. Ex: [0, 4.99999] for pulsePerInterval = 5
     
     # Saves the Data Analysis: Peak Features for Each Well-Shaped Pulse
     saveInputData = True   
     if saveInputData:
-        saveDataFolder = "./Output Data/20210510/"      # Data Folder to Save the Data; MUST END IN '/'
+        saveDataFolder = "./Output Data/Pulse Data/20210510/"      # Data Folder to Save the Data; MUST END IN '/'
         sheetName = "Blood Pulse Data"                   # If SheetName Already Exists, Excel Will Add 1 to the end (The Copy Number) 
-      
+    
+    # Take the Average of GSR Data
+    combineGSR = True # Reduce GSR Points to One Point Per windowGSR Number of Input Points
+    windowGSR = 5     # Number of Points to Average Together
+    
+    # Save GSR Data
+    saveGSRData = True
+    if saveGSRData:
+        saveDataFolderGSR = "./Output Data/GSR Data/20210510/"      # Data Folder to Save the Data; MUST END IN '/'
+        sheetName = "Blood Pulse Data"                   # If SheetName Already Exists, Excel Will Add 1 to the end (The Copy Number) 
+    
+    
+
     # ---------------------------------------------------------------------- #
     #                   Extract Pulse Peak Data from Signals                 #
     # ---------------------------------------------------------------------- #
-
-    # Read Data from Excel
-    excelData = excelProcessing.excelProcessing()
-    time, signalData = excelData.getData(testDataExcelFile, testSheetNum)
-    signalData = signalData*10**12 # Get Data into pico-Farad
     
-    # Plot the Initial Input Data
-    plot = peakAnalysis.plot()
-    plot.plotData(time, signalData, title = "Input ECG Data")
-    
-    # Seperate Pulses and Perform Indivisual Analysis
-    dataProcessing = peakAnalysis.signalProcessing()
-    bloodPulse = dataProcessing.sepPulseAnalyze(time, signalData, minBPM = 30, maxBPM = 220, 
-                                plotSeperation = plotSeperation, plotGaussFit = plotGaussFit)
-    
-    if combinePulses:
-        savingDict, savingPulseInd = dataProcessing.combinePulses(pulsePerInterval)
-    else:
-        savingDict = bloodPulse
-        savingPulseInd = dataProcessing.goodPulseNums
-    
-    # Plot a Specific Pulse
-    plotPulse = False
-    if plotPulse:
-        # Specify Number of Plots and Figure Style
-        maxPulsesPlot = 9; numSubPlotsX = 3;
-        figWidth = 25; figHeight = 13;
-        # Create One Plot with Up to First 'maxPulsesPlot' Pulse Curves
-        firstPeakPlotting = 1
-        plot.plotPulses(bloodPulse, numSubPlotsX, firstPeakPlotting, maxPulsesPlot, figWidth, figHeight, finalPlot = True)
+    if analyzePulse:
+        # Read Data from Excel
+        excelDataPulse = excelProcessing.processPulseData()
+        time, signalData = excelDataPulse.getData(pulseExcelFile, testSheetNum = 0)
+        signalData = signalData*10**12 # Get Data into pico-Farad
+        
+        # Plot the Initial Input Data
+        plot = pulseAnalysis.plot()
+        plot.plotData(time, signalData, title = "Input Pulse Data")
+        
+        # Seperate Pulses and Perform Indivisual Analysis
+        dataProcessing = pulseAnalysis.signalProcessing()
+        bloodPulse = dataProcessing.sepPulseAnalyze(time, signalData, minBPM = 30, maxBPM = 220, 
+                                    plotSeperation = plotSeperation, plotGaussFit = plotGaussFit)
+        
+        if combinePulses:
+            savingDict, savingPulseInd = dataProcessing.combinePulses(pulsePerInterval)
+        else:
+            savingDict = bloodPulse
+            savingPulseInd = dataProcessing.goodPulseNums
         
         # Plot a Specific Pulse
-        pulseNum = 4
-        plot.plotPulseNum(bloodPulse, pulseNum = pulseNum, finalPlot = True)
+        plotPulse = False
+        if plotPulse:
+            # Specify Number of Plots and Figure Style
+            maxPulsesPlot = 9; numSubPlotsX = 3;
+            figWidth = 25; figHeight = 13;
+            # Create One Plot with Up to First 'maxPulsesPlot' Pulse Curves
+            firstPeakPlotting = 1
+            plot.plotPulses(bloodPulse, numSubPlotsX, firstPeakPlotting, maxPulsesPlot, figWidth, figHeight, finalPlot = True)
+            
+            # Plot a Specific Pulse
+            pulseNum = 4
+            plot.plotPulseNum(bloodPulse, pulseNum = pulseNum, finalPlot = True)
+            
+        # Save Pulse Labels (if Desired)
+        if saveInputData:
+            saveExcelName = os.path.basename(pulseExcelFile).split(".")[0] + ".xlsx"
+            excelDataPulse.saveResults(savingDict, savingPulseInd, saveDataFolder, saveExcelName, sheetName)
+    
+    
+    # ---------------------------------------------------------------------- #
+    #                   Extract Pulse Peak Data from Signals                 #
+    # ---------------------------------------------------------------------- #
+    
+    if analyzeGSR:
+        # Read Data from Excel
+        excelDataGSR = excelProcessing.processGSRData()
+        timeGSR, currentGSR = excelDataGSR.getData(gsrFile, testSheetNum = 0)
+        currentGSR = currentGSR*10**6 # Get Data into micro-Farad
         
-    # Save Pulse Labels (if Desired)
-    if saveInputData:
-        saveExcelName = os.path.basename(testDataExcelFile).split(".")[0] + ".xlsx"
-        excelData.saveResults(savingDict, savingPulseInd, saveDataFolder, saveExcelName, sheetName)
+        # Plot the Initial Input Data
+        plot = gsrAnalysis.plot()
+        plot.plotData(timeGSR, currentGSR, title = "Input GSR Data")
+        
+        gsrProcessing = gsrAnalysis.signalProcessing()
+        timeGSR, currentGSR = gsrProcessing.downsizeDataTime(timeGSR, currentGSR, downsizeWindow = windowGSR)
+        plot.plotData(timeGSR, currentGSR, title = "Downsized GSR Data")
+        
+        if saveGSRData:
+            saveExcelNameGSR = os.path.basename(gsrFile).split(".")[0] + ".xlsx"
+            excelDataGSR.saveResults(timeGSR, currentGSR, saveDataFolderGSR, saveExcelNameGSR)
+        
+        
     
     
+    
+"""
+# Extra Options to Extract Signal Information
+import heartpy as hp
+import neurokit2 as nk
+
     # ---------------------------------------------------------------------- #
     #                    Extract Body Parameters from Signals                #
     # ---------------------------------------------------------------------- #
@@ -134,3 +180,4 @@ if __name__ == "__main__":
         
         # Show Complexity of the Signal
         parameters = nk.complexity_optimize(filterData, show=True)
+"""
