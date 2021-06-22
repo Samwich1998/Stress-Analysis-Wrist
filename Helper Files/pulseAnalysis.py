@@ -268,7 +268,7 @@ class signalProcessing:
         for pulseNum in range(1, len(risingPeaks) - 1):
             pulseEndInd = self.findLeftMinimum(smoothData, risingPeaks[pulseNum])
             # Cull Pulses That are Too Big: Likely Double Pulse
-            if pulseEndInd - pulseStartInd > maxPointsPerPulse:
+            if pulseEndInd - pulseStartInd > maxPointsPerPulse or pulseEndInd - pulseStartInd <= 1:
                 continue
             
             self.bloodPulse[pulseNum] = {}

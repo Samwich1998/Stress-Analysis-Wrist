@@ -53,8 +53,8 @@ if __name__ == "__main__":
     analyzeGSR = False
     
     # Optional Parameters for the Pulse Data
-    plotSeperation = True
-    plotGaussFit = True
+    plotSeperation = False
+    plotGaussFit = False
     
     # Take the Average of Pulse Features in a Certain Time Frame
     combinePulses = False # Reduce Signal Features to One Feature Per pulsePerInterval
