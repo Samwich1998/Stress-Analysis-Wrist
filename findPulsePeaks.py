@@ -46,15 +46,15 @@ if __name__ == "__main__":
     # ---------------------------------------------------------------------- #
     
     # Specify the Location of the Input Data
-    pulseExcelFile = "./Input Data/Pulse Data/Changhao 0528/5-Recover_Changhao_20210528.xls" # Path to the Excel Data ('.xls' or '.xlsx')
+    pulseExcelFile = "./Input Data/Pulse Data/stroop_01.xlsx" # Path to the Excel Data ('.xls' or '.xlsx')
     gsrFile = "./Input Data/Galvanic Skin Response Data/20210525 cold gsr_ehsan.txt"   # Path to the GSR Data ('.txt', '.csv', 'xlsx')
     # Specify Which Program to Run: Eventually We Will do Both Together
-    analyzePulse = False
-    analyzeGSR = True
+    analyzePulse = True
+    analyzeGSR = False
     
     # Optional Parameters for the Pulse Data
-    plotSeperation = False
-    plotGaussFit = False
+    plotSeperation = True
+    plotGaussFit = True
     
     # Take the Average of Pulse Features in a Certain Time Frame
     combinePulses = False # Reduce Signal Features to One Feature Per pulsePerInterval
@@ -63,15 +63,15 @@ if __name__ == "__main__":
     # Saves the Data Analysis: Peak Features for Each Well-Shaped Pulse
     saveInputData = True   
     if saveInputData:
-        saveDataFolder = "./Output Data/Pulse Data/20210510/"      # Data Folder to Save the Data; MUST END IN '/'
+        saveDataFolder = "./Output Data/Pulse Data/"      # Data Folder to Save the Data; MUST END IN '/'
         sheetName = "Blood Pulse Data"                   # If SheetName Already Exists, Excel Will Add 1 to the end (The Copy Number) 
     
     # Take the Average of GSR Data
-    combineGSR = True # Reduce GSR Points to One Point Per windowGSR Number of Input Points
+    combineGSR = False # Reduce GSR Points to One Point Per windowGSR Number of Input Points
     windowGSR = 5     # Number of Points to Average Together
     
     # Save GSR Data
-    saveGSRData = True
+    saveGSRData = False
     if saveGSRData:
         saveDataFolderGSR = "./Output Data/GSR Data/20210510/"      # Data Folder to Save the Data; MUST END IN '/'
         sheetName = "Blood Pulse Data"                   # If SheetName Already Exists, Excel Will Add 1 to the end (The Copy Number) 
