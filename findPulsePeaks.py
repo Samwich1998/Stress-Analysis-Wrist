@@ -32,52 +32,86 @@
 # Basic Modules
 import os
 import sys
+import numpy as np
+# Machine Learning Modules
+import collections
+from sklearn.model_selection import train_test_split
 # Import Python Helper Files (And Their Location)
-sys.path.append('./Helper Files/')  # Folder with All the Helper Files
+sys.path.append('./Helper Files/Data Aquisition and Analysis/')  # Folder with All the Helper Files
 import excelProcessing
 import pulseAnalysis
 import gsrAnalysis
-
+# Import Machine Learning Files (And They Location)
+sys.path.append("Helper Files/Machine Learning Modules/")
+import ANN
+import KNN                  # Functions for K-Nearest Neighbors' Algorithm
+import SVM                  # Functions for Support Vector Machines Algorithm
+import randomForest
+import LogisticRegression   # Functions for Logistic Regression's Algorithm
 
 
 if __name__ == "__main__":
     # ---------------------------------------------------------------------- #
     #    User Parameters to Edit (More Complex Edits are Inside the Files)   #
     # ---------------------------------------------------------------------- #
-    
-    # Specify the Location of the Input Data
-    pulseExcelFile = "./Input Data/Pulse Data/stroop_01.xlsx" # Path to the Excel Data ('.xls' or '.xlsx')
-    gsrFile = "./Input Data/Galvanic Skin Response Data/20210525 cold gsr_ehsan.txt"   # Path to the GSR Data ('.txt', '.csv', 'xlsx')
-    # Specify Which Program to Run: Eventually We Will do Both Together
+
+    # Specify Which Program to Run; All Can be Run in One Scirpt (NOT Simutaneously Yet)
     analyzePulse = True
     analyzeGSR = False
+    trainModel = False
+    # ---------------------------------------------------------------------- #
+    # ---------------------------------------------------------------------- #
+    # Pulse Parameters
+    if analyzePulse:
+        # Specify the Location of the Input Data
+        pulseExcelFile = "./Input Data/Pulse Data/stroop_01.xlsx" # Path to the Excel Data ('.xls' or '.xlsx')
+        # Required Parameters
+        diastolicCapacitance = 112  # This Represents the Diastolic Pressure; We Are Assuming it is Constant Throughout the Experiment
+        systolicCapacitance = 65    # This Represents the Systolic Pressure; We Will Use This Value as a Baseline for Other Systolic Pressures
+        # OPTIONAL Parameters to Visualize the Pulse Data
+        plotSeperation = False
+        plotGaussFit = False
+        # Average Nearby Pulses (After the Data is Collected)
+        combinePulses = False # Reduce Signal Features to One Feature Per pulsePerInterval
+        if combinePulses:
+            pulsePerInterval = 3  # The Number of Seconds for Each Signal. Ex: [0, 4.99999] for pulsePerInterval = 5
+        # Saves the Data Analysis: Peak Features for Each Well-Shaped Pulse
+        saveInputData = True   
+        if saveInputData:
+            saveDataFolder = "./Output Data/Pulse Data/"      # Data Folder to Save the Data; MUST END IN '/'
+            sheetName = "Blood Pulse Data"                   # If SheetName Already Exists, Excel Will Add 1 to the end (The Copy Number) 
     
-    # Optional Parameters for the Pulse Data
-    plotSeperation = False
-    plotGaussFit = False
+    # ---------------------------------------------------------------------- #
+    # ---------------------------------------------------------------------- #
+    # GSR Parameters
+    if analyzeGSR:
+        # Specify the Location of the Input Data
+        gsrFile = "./Input Data/Galvanic Skin Response Data/20210525 cold gsr_ehsan.txt"  # Path to the GSR Data ('.txt', '.csv', 'xlsx')
+        # GSR Parameters
+        windowGSR = 5     # Number of Points to Average Together
+        # Save GSR Data
+        saveGSRData = False
+        if saveGSRData:
+            saveDataFolderGSR = "./Output Data/GSR Data/20210510/"  # Data Folder to Save the Data; MUST END IN '/'
+    # ---------------------------------------------------------------------- #
+    # ---------------------------------------------------------------------- #
+    # Machien Learning Parameters
+    if trainModel:
+        # Machine Learning File/Model Paths + Titles
+        trainingDataExcelFolder = "./Input Data/Compiled Data/Stress Test Changhao/Rest&CPT data_Changhao only/Training Data/"
+        validationDataExcelFolder = "./Input Data/Compiled Data/Stress Test Changhao/Rest&CPT data_Changhao only/Validation Data/"
+        modelPath = "./Helper Files/Machine Learning Modules/Models/myPulseModel.pkl"
+        signalLabelsTitles = ["Not Stressed", "Stressed"]
+        # Specify the ML Model Type
+        applyKNN = False
+        applyNN = False
+        applySVM = False
+        applyRF = True
+        applyLR = False
+        # Specify if We Are Saving the Model
+        saveModel = False
+    # ---------------------------------------------------------------------- #
     
-    # Take the Average of Pulse Features in a Certain Time Frame
-    combinePulses = False # Reduce Signal Features to One Feature Per pulsePerInterval
-    pulsePerInterval = 3  # The Number of Seconds for Each Signal. Ex: [0, 4.99999] for pulsePerInterval = 5
-    
-    # Saves the Data Analysis: Peak Features for Each Well-Shaped Pulse
-    saveInputData = True   
-    if saveInputData:
-        saveDataFolder = "./Output Data/Pulse Data/"      # Data Folder to Save the Data; MUST END IN '/'
-        sheetName = "Blood Pulse Data"                   # If SheetName Already Exists, Excel Will Add 1 to the end (The Copy Number) 
-    
-    # Take the Average of GSR Data
-    combineGSR = False # Reduce GSR Points to One Point Per windowGSR Number of Input Points
-    windowGSR = 5     # Number of Points to Average Together
-    
-    # Save GSR Data
-    saveGSRData = False
-    if saveGSRData:
-        saveDataFolderGSR = "./Output Data/GSR Data/20210510/"      # Data Folder to Save the Data; MUST END IN '/'
-        sheetName = "Blood Pulse Data"                   # If SheetName Already Exists, Excel Will Add 1 to the end (The Copy Number) 
-    
-    
-
     # ---------------------------------------------------------------------- #
     #                   Extract Pulse Peak Data from Signals                 #
     # ---------------------------------------------------------------------- #
@@ -94,8 +128,8 @@ if __name__ == "__main__":
         
         # Seperate Pulses and Perform Indivisual Analysis
         dataProcessing = pulseAnalysis.signalProcessing()
-        bloodPulse = dataProcessing.sepPulseAnalyze(time, signalData, minBPM = 30, maxBPM = 220, 
-                                    plotSeperation = plotSeperation, plotGaussFit = plotGaussFit)
+        bloodPulse = dataProcessing.sepPulseAnalyze(time, signalData, diastolicCapacitance, systolicCapacitance,
+                        minBPM = 30, maxBPM = 220, plotSeperation = plotSeperation, plotGaussFit = plotGaussFit)
         
         if combinePulses:
             savingDict, savingPulseInd = dataProcessing.combinePulses(pulsePerInterval)
@@ -146,8 +180,78 @@ if __name__ == "__main__":
             excelDataGSR.saveResults(timeGSR, currentGSR, saveDataFolderGSR, saveExcelNameGSR)
         
         
+    # ---------------------------------------------------------------------- #
+    #                         Analyze GSR Data                               #
+    # ---------------------------------------------------------------------- #
     
-    
+    if trainModel:
+        excelDataML = excelProcessing.processMLData()
+        # Read in Training Data/Labels
+        signalData = []; signalLabels = []; headerTitles = []
+        for MLFile in os.listdir(trainingDataExcelFolder):
+            MLFile = trainingDataExcelFolder + MLFile
+            signalData, signalLabels, headerTitles = excelDataML.getData(MLFile, signalData = signalData, signalLabels = signalLabels, testSheetNum = 0)
+        signalData = np.array(signalData); signalLabels = np.array(signalLabels)
+        # Read in Validation Data/Labels
+        Validation_Data = []; Validation_Labels = [];
+        for MLFile in os.listdir(validationDataExcelFolder):
+            MLFile = validationDataExcelFolder + MLFile
+            Validation_Data, Validation_Labels, headerTitles = excelDataML.getData(MLFile, signalData = Validation_Data, signalLabels = Validation_Labels, testSheetNum = 0)
+        Validation_Data = np.array(Validation_Data); Validation_Labels = np.array(Validation_Labels)
+        print("\nCollected Signal Data")
+        
+        Validation_Data = Validation_Data[:][:,0:6]
+        signalData = signalData[:][:,0:6]
+        headerTitles = headerTitles[0:6]
+        
+        # Split the Data Randomly into Training and Testing Data Sets
+        Training_Data, Testing_Data, Training_Labels, Testing_Labels = train_test_split(signalData, signalLabels, test_size=0.5, shuffle= True, stratify=signalLabels)
+        
+        # Create the Machine Learning Module
+        if applyNN:
+            MLModel = ANN.NeuralNet(modelPath = modelPath, dataDim = len(signalData[0]))
+
+            # If You Want to Loop Through All Options: DONT DO THIS (WORK IN PROGRESS)
+            if False:
+                ANNHelp = ANN.Helpers(modelPath, dataDimension = len(signalData[0]), numClasses = 2)
+                neuralOptimizerList = ANNHelp.neuralPermutations()
+                
+                validationScores = []
+                for model in neuralOptimizerList:
+                    model.trainModel(Training_Data, Training_Labels, Testing_Data, Testing_Labels)
+                    validationScores.append(model.scoreModel(Validation_Data, Validation_Labels))
+
+        if applyKNN:
+            MLModel = KNN.KNN(modelPath = modelPath, numClasses = 2, weight = 'distance')
+        elif applySVM:
+            MLModel = SVM.SVM(modelPath = modelPath, modelType = "linear", polynomialDegree = 5)
+        elif applyRF:
+            MLModel = randomForest.randomForest(modelPath = modelPath)
+        elif applyLR:
+            MLModel = LogisticRegression.logisticRegression(modelPath = modelPath)
+        
+        
+
+        # Train the Classifier (the Model) with the Training Data
+        MLModel.trainModel(Training_Data, Training_Labels, Testing_Data, Testing_Labels, scoreType = "Testing Score:")
+        MLModel.scoreModel(Validation_Data, Validation_Labels, scoreType = "Validation Score:")
+        MLModel.featureImportance(signalData, signalLabels, headerTitles)
+        
+        # Plot the Machine Learning Results
+        MLModel.accuracyDistributionPlot(signalData, signalLabels, MLModel.predictData(signalData), signalLabelsTitles)
+        #map2D = MLModel.mapTo2DPlot(signalData, signalLabels) # Plot the Classification in 2D Map
+        
+        # Find the Class Data Distribution in the Total Training/Testing Set
+        classDistribution = collections.Counter(signalLabels)
+        print("Class Distribution:", classDistribution)
+        print("Number of Classes Found = ", len(classDistribution))
+
+        # Save the Classifier: if Desired
+        if saveModel:
+            MLModel.saveModel(modelPath)
+        
+        
+
     
 """
 # Extra Options to Extract Signal Information
@@ -180,4 +284,6 @@ import neurokit2 as nk
         
         # Show Complexity of the Signal
         parameters = nk.complexity_optimize(filterData, show=True)
+        
+pulseNum = 17; window = 10; x = bloodPulse[pulseNum]['time']; y = bloodPulse[pulseNum]['pulseData']; smoothY = bloodPulse[pulseNum]['smoothData']; fftY = scipy.fft(smoothY); plt.plot(x[1:],smoothY[0]+fftY[1:]-fftY[1]); plt.plot(x,smoothY)
 """

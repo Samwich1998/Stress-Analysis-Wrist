@@ -207,7 +207,7 @@ class signalProcessing:
         return pulseData
     
     
-    def sepPulseAnalyze(self, time, signalData, minBPM = 27, maxBPM = 480, plotSeperation = False, plotGaussFit = False):
+    def sepPulseAnalyze(self, time, signalData, diastolicPressure0, systolicPressure0, minBPM = 27, maxBPM = 480, plotSeperation = False,plotGaussFit = False):
         """
         ----------------------------------------------------------------------
         Input Parameters:
@@ -223,41 +223,40 @@ class signalProcessing:
         ----------------------------------------------------------------------
         """        
         print("\nSeperating Pulse Data")
-        # Smoothen Out the Data to Eliminate Small Peaks
+        # Smoothen Out the Data to Eliminate Small Peaks (Noise)
         smoothData = savgol_filter(signalData, 5, 3)
         
-        # Take First Derivative of Smoothened Data (Add Slight Smooting)
-        pulseFit= splrep(time, smoothData, k = 5, s = 0.05) # k = [1,5], Choose 5 for Best Fit; s = Smoothing Factor
-        firstDer = splev(time, pulseFit, der = 1)
+        # Take First Derivative of Smoothened Data
+        #pulseFit= splrep(time, smoothData, k = 5, s = 0.05) # k = [1,5], Choose 5 for Best Fit; s = Smoothing Factor
+        #firstDer = splev(time, pulseFit, der = 1)
+        firstDer = [0];
+        for pointInd in range(1, len(smoothData)):
+            firstDer.append((smoothData[pointInd] - smoothData[pointInd-1])/(time[pointInd] - time[pointInd-1]))
 
-        # Threshold that Defines the Slope of the R-Peak (Systolic Peak; First Peak)
-        #firstDerRMS = self.window_rms(firstDer, 3)
+        # Estimate that Defines the Number of Points in a Pulse
         minPointsPerPulse = np.searchsorted(time, 60/maxBPM, side="left") + 1
         maxPointsPerPulse = np.searchsorted(time, 60/minBPM, side="left") + 1
         # Find Mid-Ampltiude of the R-Peak (Systolic Peak; First Peak)
         possibleRisingPeaks = scipy.signal.find_peaks(firstDer, prominence = .8, distance = minPointsPerPulse)[0]
         # Cull Bad Pulse Indices
-        lastGoodInd = 1; risingPeaks = np.array([]); gotGoodPeak = False;
+        lastGoodInd = 1; risingPeaks = []; gotGoodPeak = False;
         for currentPlace, peakCompareInd in enumerate(possibleRisingPeaks):
             peakStandard = firstDer[possibleRisingPeaks[lastGoodInd]]
             peakCompare = firstDer[peakCompareInd]
             # Good Peak
             if peakCompare > peakStandard * 0.5:
-                risingPeaks = np.append(risingPeaks, peakCompareInd)
+                risingPeaks.append(peakCompareInd)
                 lastGoodInd = currentPlace
                 gotGoodPeak = True
             elif not gotGoodPeak:
                 lastGoodInd += 1
-        risingPeaks = risingPeaks.astype(int)
-        #risingPeaks = risingPeaks[firstDer[risingPeaks] > 0.5 * np.append(firstDer[risingPeaks[1]], firstDer[risingPeaks[0:-1]])]
-        
         
         # If Questioning: Plot to See How the Pulses Seperated
         if plotSeperation:
-            scaledData = signalData*max(abs(firstDer))/(max(signalData) - min(signalData))
+            risingPeaks = np.array(risingPeaks); firstDer = np.array(firstDer)
+            scaledData = signalData*max(np.abs(firstDer))/(max(signalData) - min(signalData))
             plt.plot(time, scaledData - np.mean(scaledData), label = "Centered + Scaled Signal Data", zorder = 3)
             plt.plot(time, firstDer, label = "First Derivative of Signal Data", zorder = 2)
-            #plt.plot(time[0:len(firstDerRMS)], firstDerRMS, label = "Root Mean Squared of First Derivative", zorder = 1)
             plt.plot(time[risingPeaks], firstDer[risingPeaks], 'o', label = "Pulse Rise Identification")
             plt.legend(loc=9, bbox_to_anchor=(1.35, 1)); plt.show();
             plt.show()
@@ -280,7 +279,7 @@ class signalProcessing:
             self.bloodPulse[pulseNum]["firstDer"] = firstDer[pulseStartInd:pulseEndInd+1]
             
             # Perform Peak Detection on Smooth Data
-            minPeakIndSep = 3
+            minPeakIndSep = 2
             topInd = scipy.signal.find_peaks(self.bloodPulse[pulseNum]['smoothData'], distance = minPeakIndSep)[0]
             # Save Peak Indices (Indices will be For Indivisual Pulse Data)
             self.bloodPulse[pulseNum]['indicesTop'] = topInd
@@ -291,7 +290,15 @@ class signalProcessing:
             self.bloodPulse[pulseNum]["finalIndGauss"] = np.array([0, *[None]*4, lastInd])
             self.bloodPulse[pulseNum]["finalAmpGauss"] = np.array([None]*4)
             # Label Systolic, Tidal Wave, Dicrotic, and Tail Wave Peaks Using Gaussian Decomposition   
-            self.labelFinalPeaks(pulseNum, minPeakIndSep, plotGaussFit)
+            goodPulse = self.labelFinalPeaks(pulseNum, minPeakIndSep, plotGaussFit)
+        
+            # If Pulse is Good
+            if goodPulse:
+                # Save Diastolic and Systolic Pressure
+                self.bloodPulse[pulseNum]['diastolicPressure'] = diastolicPressure0
+                self.bloodPulse[pulseNum]['systolicPressure'] = diastolicPressure0 + (self.bloodPulse[pulseNum]["smoothData"][self.bloodPulse[pulseNum]['finalInd'][1]]/self.bloodPulse[self.goodPulseNums[0]]["smoothData"][self.bloodPulse[pulseNum]['finalInd'][1]])*(systolicPressure0 - diastolicPressure0)
+                # Add Saving Details to the Pulse Info
+                self.formatSavingPulse(pulseNum)
             
             # Hash Indices for Full DataSet
             self.bloodPulse[pulseNum]["dataHash"] = pulseStartInd, pulseEndInd
@@ -391,7 +398,8 @@ class signalProcessing:
         # If the Systolic, Dicrotic, and Tail Peaks were Found (Don't Need Tidal)
         if systolicPeak and dicroticPeakInd and tailPeak:
             # Perform Gaussian Decomposition on the Data
-            self.gausDecomp(pulseNum, plotGaussFit = plotGaussFit)
+            return self.gausDecomp(pulseNum, plotGaussFit = plotGaussFit)
+        return False
 
     
     def gaussModel(self, x, amplitude, fwtm, center):
@@ -483,35 +491,10 @@ class signalProcessing:
         meanErrorSQ = np.mean(errorSQ)
         #print(rSquared1, rSquared2, coefficient_of_dermination, meanErrorSQ)
         
-        # Only Take Pulses with a Good Fit
-        if rSquared1 > 0.98 and rSquared2 > 0.98 and coefficient_of_dermination > 0.98 and meanErrorSQ < 1E-2:
-            # Keep Track of Good Pules
-            self.goodPulseNums.append(pulseNum)
-            # Extract Data From Gaussian's in Fit to Save
-            comps = finalFitInfo.eval_components(x=x)
-            for peakInd in range(1,5):
-                # Save the Gaussian Center's Index and Amplitude
-                self.bloodPulse[pulseNum]["finalIndGauss"][peakInd] = comps['g'+str(peakInd)+'_'].argmax()
-                self.bloodPulse[pulseNum]["finalAmpGauss"][peakInd-1] = max(comps['g'+str(peakInd)+'_'])
-            # If We Previously Missed the Tidal Wave, Use the Gaussian's Tidal Wave Index
-            if not self.bloodPulse[pulseNum]["finalInd"][2]:
-                self.bloodPulse[pulseNum]["finalInd"][2] = self.bloodPulse[pulseNum]["finalIndGauss"][2]
-            # Add Saving Details to the Pulse Info
-            self.formatSavingPulse(pulseNum)
-        # If Bad, Try and Add an Extra Gaussian to the Tail
-        elif not addExtraGauss:
-            self.gausDecomp(pulseNum, plotGaussFit, addExtraGauss = True)
-            return None
-        # If Still Bad, Throw Out the Pulse
-        else:
-            return None
-        
         # Plot the Pulse with its Fit 
-        if plotGaussFit:
+        def plotGaussianFit():
             finalInd = self.bloodPulse[pulseNum]["finalInd"]
             dely = finalFitInfo.eval_uncertainty(sigma=3)
-     #       x = np.array(x)
-    #        y = np.array(y)
             plt.plot(x, y, linewidth = 2, color = "black")
             plt.plot(x[finalInd.astype(int)], y[finalInd.astype(int)], 'o')
             plt.plot(x, comps['g1_'], '--', color = "tab:red", alpha = 0.8, label='Systolic Pulse')
@@ -528,6 +511,30 @@ class signalProcessing:
             plt.legend(loc='best')
             plt.title("Gaussian Decomposition of Pulse Number " + str(pulseNum))
             plt.show()
+        
+        # Only Take Pulses with a Good Fit
+        if rSquared1 > 0.98 and rSquared2 > 0.98 and coefficient_of_dermination > 0.98 and meanErrorSQ < 1E-2:
+            # Keep Track of Good Pules
+            self.goodPulseNums.append(pulseNum)
+            # Extract Data From Gaussian's in Fit to Save
+            comps = finalFitInfo.eval_components(x=x)
+            for peakInd in range(1,5):
+                # Save the Gaussian Center's Index and Amplitude
+                self.bloodPulse[pulseNum]["finalIndGauss"][peakInd] = comps['g'+str(peakInd)+'_'].argmax()
+                self.bloodPulse[pulseNum]["finalAmpGauss"][peakInd-1] = max(comps['g'+str(peakInd)+'_'])
+            # If We Previously Missed the Tidal Wave, Use the Gaussian's Tidal Wave Index
+            if not self.bloodPulse[pulseNum]["finalInd"][2]:
+                self.bloodPulse[pulseNum]["finalInd"][2] = self.bloodPulse[pulseNum]["finalIndGauss"][2]
+            # Plot Gaussian Fit
+            if plotGaussFit:
+                plotGaussianFit()
+            # Return True if it Worked
+            return True
+        # If Bad, Try and Add an Extra Gaussian to the Tail
+        elif not addExtraGauss:
+            return self.gausDecomp(pulseNum, plotGaussFit, addExtraGauss = True)
+        # If Still Bad, Throw Out the Pulse
+        return False
     
     def formatSavingPulse(self, pulseNum):
         # Initialize Data
@@ -542,12 +549,10 @@ class signalProcessing:
         # Add the Peak Amplitudes
         for peakInd in finalInd[1:-1]:
             row.append(pulseInfo["smoothData"][peakInd])
-        # Check to Make Sure Data is All There
-        if len(finalTimeDiff) != 5:
-            print("Error in Recording Data in Pulse Number", pulseNum)
-            sys.exit()
+        # Add Systolic and Diastolic Pressure
+        row.extend([pulseInfo['diastolicPressure'], pulseInfo['systolicPressure']])
             
-        # Add Gaussian Data
+        # Add Seperator Between Gaussian Data
         row.append("")
         # Add the Time Differences Between the Gaussian Pulse Peaks
         finalIndGauss = pulseInfo['finalIndGauss']
@@ -580,7 +585,7 @@ class signalProcessing:
             # Get All the Pulses in the Interval
             for combiningPulse in combiningPulses:
                 row = self.bloodPulse[combiningPulse]["Results to Save"]
-                row[12] = 0
+                row[row.index("")] = 0
                 newResult.append(row)
             # Take the Median of All the Pulse Data
             if newResult:
@@ -589,7 +594,7 @@ class signalProcessing:
                 newResult[0] = groupInd
                 newResult[1] = (groupInd-1)*pulsePerInterval
                 newResult[2] = groupInd*pulsePerInterval
-                newResult[12] = ""
+                newResult[newResult.index(0)] = ""
                 # Save the New Data
                 self.medPulse[groupInd] = {}
                 self.medPulse[groupInd]["Results to Save"] = newResult

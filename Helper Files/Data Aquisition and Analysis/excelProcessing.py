@@ -4,6 +4,7 @@
 import os
 import sys
 import numpy as np
+import pandas as pd
 # Read/Write to Excel
 import csv
 import pyexcel
@@ -57,16 +58,25 @@ class dataProcessing:
     def convertToExcel(self, inputFile, excelFile, excelDelimiter = ",", overwriteXL = False, testSheetNum = 0):
         # If the File is Not Already Converted: Convert the CSV to XLSX
         if not os.path.isfile(excelFile) or overwriteXL:
-            # Make Excel WorkBook
-            xlWorkbook = xl.Workbook()
-            xlWorksheet = xlWorkbook.active
-            # Write the Data from the CSV File to the Excel WorkBook
-            with open(inputFile) as newFile:
-                reader = csv.reader(newFile, delimiter = excelDelimiter)
-                for row in reader:
-                    xlWorksheet.append(row)
-            # Save as New Excel File
-            xlWorkbook.save(excelFile)
+            if excelDelimiter == "fixedWidth":
+                df = pd.read_fwf(inputFile)
+                df.drop(index=0, inplace=True) # drop the underlines
+                df.to_excel(excelFile, index=False)
+                # Load the GSR Data from the Excel File
+                xlWorkbook = xl.load_workbook(excelFile, data_only=True, read_only=True)
+                xlWorksheet = xlWorkbook.worksheets[testSheetNum]
+            else:
+                # Make Excel WorkBook
+                xlWorkbook = xl.Workbook()
+                xlWorksheet = xlWorkbook.active
+                # Write the Data from the CSV File to the Excel WorkBook
+                with open(inputFile, "r") as inputData:
+                    inReader = csv.reader(inputData, delimiter = excelDelimiter)
+                    with open(excelFile, 'w+', newline=''):
+                        for row in inReader:
+                            xlWorksheet.append(row)    
+                # Save as New Excel File
+                xlWorkbook.save(excelFile)
         # Else Load the GSR Data from the Excel File
         else:
             # Load the GSR Data from the Excel File
@@ -154,7 +164,7 @@ class processPulseData(dataProcessing):
         # Label First Row
         header = ["Pulse Number", "Start Time", "End Time", 'Systolic Time From Start', 'Tidal Wave Time From Systolic', 'Dicrotic Time From Tidal Wave',
                   'Tail Wave Time From Dicrotic', 'End Time From Tail Wave', 'Systolic Peak Amplitude', 'Tidal Wave Peak Ampltiude',
-                  "Dicrotic Peak Amplitude", 'Tail Wave Peak Ampltitude']
+                  "Dicrotic Peak Amplitude", 'Tail Wave Peak Ampltitude', 'Diastolic Pressure (pF)', 'Systolic Pressure (pF)']
         header.extend(["", 'Gaussian Systolic Time From Start', 'Gaussian Tidal Wave Time From Systolic', 'Gaussian Dicrotic Time From Tidal Wave',
                   'Gaussian Tail Wave Time From Dicrotic', 'Gaussian End Time From Tail Wave', 'Gaussian Systolic Peak Amplitude', 'Gaussian Tidal Wave Peak Ampltiude',
                   "Gaussian Dicrotic Peak Amplitude", 'Gaussian Tail Wave Peak Ampltitude'])
@@ -330,7 +340,65 @@ class processGSRData(dataProcessing):
         WB.save(excel_file)
         WB.close()
 
+
+class processMLData(dataProcessing):
+    
+    def getData(self, MLFile, signalData = [], signalLabels = [], testSheetNum = 0):
+        """
+        Extracts Pulse Data from Excel Document (.xlsx). Data can be in any
+        worksheet which the user can specify using 'testSheetNum' (0-indexed).
         
+        If No Data is present in one cell of a row, it will be read in as zero.
+        --------------------------------------------------------------------------
+        Input Variable Definitions:
+            MLFile: The Path to the Excel File Containing the Compiled ML Data
+            testSheetNum: An Integer Representing the Excel Worksheet (0-indexed) Order.
+        --------------------------------------------------------------------------
+        """
+        # Check if File Exists
+        if not os.path.exists(MLFile):
+            print("The following Input File Does Not Exist:", MLFile)
+            sys.exit()
+        # Convert to Exel if .xls Format; If .xlsx, Do Nothing; If Other, Exit Program
+        if MLFile.endswith(('.xlsx', '.xls', '.csv', 'txt')):
+            MLFile = self.convertToXLSX(MLFile)
+        else:
+            return signalData, signalLabels, []
+
+        # Load Data from the Excel File
+        WB = xl.load_workbook(MLFile, data_only=True, read_only=True)
+        WB_worksheets = WB.worksheets
+        ExcelSheet = WB_worksheets[testSheetNum]
+        
+        # If Header Exists, Skip Until You Find the Data
+        headerTitles = ["Pulse Time"]
+        for row in ExcelSheet.rows:
+            cellA = row[0]
+            if type(cellA.value) in [float, int]:
+                dataStartRow = cellA.row
+                break
+            else:
+                for col in row[3:-1]:
+                    if col.value != None:
+                        headerTitles.append(col.value)
+        
+        # Loop Through the Excel Worksheet to collect all the data
+        for pointNum, row in enumerate(ExcelSheet.iter_rows(min_col=2, min_row=dataStartRow, max_row=ExcelSheet.max_row)):
+            # Get Cell Values for the Data
+            signalData.append([row[1].value - row[0].value])
+            for cellCol in row[2:-1]:
+                if cellCol.value != None:
+                    signalData[-1].append(cellCol.value)
+            
+            # SafeGaurd: If User Edits the Document to Create Empty Rows, Stop Reading in Data
+            if signalData[-1] == []:
+                signalData.pop()
+                break
+            else:
+                signalLabels.append(row[-1].value)
+             
+        # Finished Data Collection: Close Workbook and Return Data to User
+        return signalData, signalLabels, headerTitles
   
     
     
