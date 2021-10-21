@@ -263,6 +263,7 @@ class signalProcessing:
         
         print("Analyzing Pulses")
         # Seperate Peaks Based on the Minimim Before the R-Peak Rise
+        minPeakIndSep = 2
         pulseStartInd = self.findLeftMinimum(smoothData, risingPeaks[0])
         for pulseNum in range(1, len(risingPeaks) - 1):
             pulseEndInd = self.findLeftMinimum(smoothData, risingPeaks[pulseNum])
@@ -279,7 +280,6 @@ class signalProcessing:
             self.bloodPulse[pulseNum]["firstDer"] = firstDer[pulseStartInd:pulseEndInd+1]
             
             # Perform Peak Detection on Smooth Data
-            minPeakIndSep = 2
             topInd = scipy.signal.find_peaks(self.bloodPulse[pulseNum]['smoothData'], distance = minPeakIndSep)[0]
             # Save Peak Indices (Indices will be For Indivisual Pulse Data)
             self.bloodPulse[pulseNum]['indicesTop'] = topInd
@@ -415,7 +415,7 @@ class signalProcessing:
         y = self.bloodPulse[pulseNum]["smoothData"]
         finalInd = self.bloodPulse[pulseNum]["finalInd"].copy()
         # Define Minimum Peak Width
-        minWidth = 10E-5
+        minWidth = 10E-4
 
         peakAmp = []; peakCenter = []; peakWidth = []
         # Extract Guesses About What the Peak Width, Center, and Amplitude Are
@@ -551,7 +551,12 @@ class signalProcessing:
             row.append(pulseInfo["smoothData"][peakInd])
         # Add Systolic and Diastolic Pressure
         row.extend([pulseInfo['diastolicPressure'], pulseInfo['systolicPressure']])
-            
+        # Add Index Parameters: https://www.vitalscan.com/dtr_pwv_parameters.htm
+        centralAugmentationIndex = pulseInfo["smoothData"][finalInd[2]]/pulseInfo["smoothData"][finalInd[1]]  # Tidal Peak / Systolic Peak
+        reflectionIndex = pulseInfo["smoothData"][finalInd[3]]/pulseInfo["smoothData"][finalInd[1]]  # Dicrotic Peak / Systolic Peak
+        stiffensIndex = 1/(finalPeakLoc[3] - finalPeakLoc[1])  # 1/ Time from the Systolic to Dicrotic Peaks
+        row.extend([centralAugmentationIndex, reflectionIndex, stiffensIndex])
+
         # Add Seperator Between Gaussian Data
         row.append("")
         # Add the Time Differences Between the Gaussian Pulse Peaks

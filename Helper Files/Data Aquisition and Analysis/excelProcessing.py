@@ -85,6 +85,21 @@ class dataProcessing:
         
         # Return Excel Sheet
         return xlWorkbook, xlWorksheet
+
+    def addExcelAesthetics(self, WB_worksheet):
+        # Center the Data in the Cells
+        align = Alignment(horizontal='center',vertical='center',wrap_text=True)        
+        for column_cells in WB_worksheet.columns:
+            length = max(len(str(cell.value) if cell.value else "") for cell in column_cells)
+            WB_worksheet.column_dimensions[xl.utils.get_column_letter(column_cells[0].column)].width = length
+            
+            for cell in column_cells:
+                cell.alignment = align
+        # Header Style
+        for cell in WB_worksheet["1:1"]:
+            cell.font = Font(color='00FF0000', italic=True, bold=True)
+        
+        return WB_worksheet
     
 
 class processPulseData(dataProcessing):
@@ -119,7 +134,7 @@ class processPulseData(dataProcessing):
         # If Header Exists, Skip Until You Find the Data
         for row in ExcelSheet.rows:
             cellA = row[0]
-            if type(cellA.value) == type(1.1):
+            if type(cellA.value) in [float, int]:
                 dataStartRow = cellA.row
                 break
         
@@ -142,7 +157,7 @@ class processPulseData(dataProcessing):
         return np.array(data["time"]), np.array(data["Capacitance"])
 
 
-    def saveResults(self, bloodPulse, pulseNumSaving, saveDataFolder, saveExcelName, sheetName = "Blood Pulse Data"):
+    def saveResults(self, bloodPulse, pulseNumSaving, saveDataFolder, saveExcelName, sheetName = "Blood Pulse Decomposed"):
         print("Saving the Data")
         # Create Output File Directory to Save Data: If Not Already Created
         os.makedirs(saveDataFolder, exist_ok=True)
@@ -164,7 +179,8 @@ class processPulseData(dataProcessing):
         # Label First Row
         header = ["Pulse Number", "Start Time", "End Time", 'Systolic Time From Start', 'Tidal Wave Time From Systolic', 'Dicrotic Time From Tidal Wave',
                   'Tail Wave Time From Dicrotic', 'End Time From Tail Wave', 'Systolic Peak Amplitude', 'Tidal Wave Peak Ampltiude',
-                  "Dicrotic Peak Amplitude", 'Tail Wave Peak Ampltitude', 'Diastolic Pressure (pF)', 'Systolic Pressure (pF)']
+                  "Dicrotic Peak Amplitude", 'Tail Wave Peak Ampltitude']
+        header.extend(['Diastolic Pressure (pF)', 'Systolic Pressure (pF)', 'Central Augmentation Index', 'Reflection Index', 'Stiffens Index (Without Height)'])
         header.extend(["", 'Gaussian Systolic Time From Start', 'Gaussian Tidal Wave Time From Systolic', 'Gaussian Dicrotic Time From Tidal Wave',
                   'Gaussian Tail Wave Time From Dicrotic', 'Gaussian End Time From Tail Wave', 'Gaussian Systolic Peak Amplitude', 'Gaussian Tidal Wave Peak Ampltiude',
                   "Gaussian Dicrotic Peak Amplitude", 'Gaussian Tail Wave Peak Ampltitude'])
@@ -175,21 +191,55 @@ class processPulseData(dataProcessing):
             # Write the Data to Excel
             WB_worksheet.append(bloodPulse[pulseNum]["Results to Save"])
         
-        # Center the Data in the Cells
-        align = Alignment(horizontal='center',vertical='center',wrap_text=True)        
-        for column_cells in WB_worksheet.columns:
-            length = max(len(str(cell.value) if cell.value else "") for cell in column_cells)
-            WB_worksheet.column_dimensions[xl.utils.get_column_letter(column_cells[0].column)].width = length
-            
-            for cell in column_cells:
-                cell.alignment = align
-        # Header Style
-        for cell in WB_worksheet["1:1"]:
-            cell.font = Font(color='00FF0000', italic=True, bold=True)
+        # Add Excel Aesthetics
+        WB_worksheet = self.addExcelAesthetics(WB_worksheet)            
             
         # Save as New Excel File
         WB.save(excel_file)
         WB.close()
+    
+    def saveFilteredData(self, bloodPulse, pulseNumSaving, saveDataFolder, saveExcelName, sheetName = "Blood Pulse Data"):
+        print("Saving the Data")
+        # Create Output File Directory to Save Data: If Not Already Created
+        os.makedirs(saveDataFolder, exist_ok=True)
+        
+        # Create Path to Save the Excel File
+        excel_file = saveDataFolder + saveExcelName
+        
+        # If the File is Not Present: Create it
+        if not os.path.isfile(excel_file):
+            # Make Excel WorkBook
+            WB = xl.Workbook()
+            WB_worksheet = WB.active 
+            WB_worksheet.title = sheetName
+        else:
+            print("Excel File Already Exists. Adding New Sheet to File")
+            WB = xl.load_workbook(excel_file)
+            WB_worksheet = WB.create_sheet(sheetName)
+        
+        # Label First Row
+        header = ["Time", "Capacitance", "Filtered Capacitance"]
+        WB_worksheet.append(header)
+        
+        # Save Data to Worksheet
+        for pulseInd in pulseNumSaving:
+            # Get the Data
+            time = bloodPulse[pulseInd]['time']
+            pulseData = bloodPulse[pulseInd]['pulseData']
+            filteredData = bloodPulse[pulseInd]['smoothData']
+            
+            for dataInd in range(len(time)):
+                row = [time[dataInd], pulseData[dataInd], filteredData[dataInd]]
+                WB_worksheet.append(row)
+        
+        # Add Excel Aesthetics
+        WB_worksheet = self.addExcelAesthetics(WB_worksheet)  
+        
+        # Save as New Excel File
+        WB.save(excel_file)
+        WB.close()
+            
+
     
     
 class processGSRData(dataProcessing):
@@ -324,17 +374,8 @@ class processGSRData(dataProcessing):
             # Write the Data to Excel
             WB_worksheet.append([timePoint, currentPoint])
         
-        # Center the Data in the Cells
-        align = Alignment(horizontal='center',vertical='center',wrap_text=True)        
-        for column_cells in WB_worksheet.columns:
-            length = max(len(str(cell.value) if cell.value else "") for cell in column_cells)
-            WB_worksheet.column_dimensions[xl.utils.get_column_letter(column_cells[0].column)].width = length
-            
-            for cell in column_cells:
-                cell.alignment = align
-        # Header Style
-        for cell in WB_worksheet["1:1"]:
-            cell.font = Font(color='00FF0000', italic=True, bold=True)
+        # Add Excel Aesthetics
+        WB_worksheet = self.addExcelAesthetics(WB_worksheet)    
             
         # Save as New Excel File
         WB.save(excel_file)
@@ -343,7 +384,7 @@ class processGSRData(dataProcessing):
 
 class processMLData(dataProcessing):
     
-    def getData(self, MLFile, signalData = [], signalLabels = [], testSheetNum = 0):
+    def getData(self, MLFile, signalData = [], signalLabels = [], testSheetNum = 0, startCollectionCol = 2):
         """
         Extracts Pulse Data from Excel Document (.xlsx). Data can be in any
         worksheet which the user can specify using 'testSheetNum' (0-indexed).
@@ -353,6 +394,7 @@ class processMLData(dataProcessing):
         Input Variable Definitions:
             MLFile: The Path to the Excel File Containing the Compiled ML Data
             testSheetNum: An Integer Representing the Excel Worksheet (0-indexed) Order.
+            startCollectionCol: The Column Index (1-Indexed) Of the Start Time of the Pulse
         --------------------------------------------------------------------------
         """
         # Check if File Exists
@@ -371,31 +413,34 @@ class processMLData(dataProcessing):
         ExcelSheet = WB_worksheets[testSheetNum]
         
         # If Header Exists, Skip Until You Find the Data
-        headerTitles = ["Pulse Time"]
+        headerTitles = []
         for row in ExcelSheet.rows:
             cellA = row[0]
+            # Find When the Data Starts: When First Number Appears
             if type(cellA.value) in [float, int]:
                 dataStartRow = cellA.row
                 break
-            else:
-                for col in row[3:-1]:
+            # Find the Header: Last String Before the Data
+            elif type(cellA) == str:
+                headerTitles = ["Pulse Time"]
+                for col in row[startCollectionCol+1:-1]:
                     if col.value != None:
                         headerTitles.append(col.value)
         
         # Loop Through the Excel Worksheet to collect all the data
-        for pointNum, row in enumerate(ExcelSheet.iter_rows(min_col=2, min_row=dataStartRow, max_row=ExcelSheet.max_row)):
-            # Get Cell Values for the Data
+        for pointNum, row in enumerate(ExcelSheet.iter_rows(min_col=startCollectionCol, max_col=ExcelSheet.max_col, min_row=dataStartRow, max_row=ExcelSheet.max_row)):
+            # SafeGaurd: If User Edits the Document to Create Empty Rows, Stop Reading in Data
+            if len(row) == 0 or row[0].value == None:
+                break
+            
+            # The First Two Columns MUST be the Pulse Times
             signalData.append([row[1].value - row[0].value])
+            # Get Cell Values for the Data
             for cellCol in row[2:-1]:
                 if cellCol.value != None:
                     signalData[-1].append(cellCol.value)
-            
-            # SafeGaurd: If User Edits the Document to Create Empty Rows, Stop Reading in Data
-            if signalData[-1] == []:
-                signalData.pop()
-                break
-            else:
-                signalLabels.append(row[-1].value)
+        # Add Signal Label (Should be at the End of the Data)
+        signalLabels.append(row[-1].value)
              
         # Finished Data Collection: Close Workbook and Return Data to User
         return signalData, signalLabels, headerTitles

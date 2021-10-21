@@ -46,7 +46,7 @@ sys.path.append("Helper Files/Machine Learning Modules/")
 import ANN
 import KNN                  # Functions for K-Nearest Neighbors' Algorithm
 import SVM                  # Functions for Support Vector Machines Algorithm
-import randomForest
+import randomForest         # Functions for the Random Forest Algorithm
 import LogisticRegression   # Functions for Logistic Regression's Algorithm
 
 
@@ -64,7 +64,7 @@ if __name__ == "__main__":
     # Pulse Parameters
     if analyzePulse:
         # Specify the Location of the Input Data
-        pulseExcelFile = "./Input Data/Pulse Data/stroop_01.xlsx" # Path to the Excel Data ('.xls' or '.xlsx')
+        pulseExcelFile = "./Input Data/Pulse Data/Recover_15.xls" # Path to the Excel Data ('.xls' or '.xlsx')
         # Required Parameters
         diastolicCapacitance = 112  # This Represents the Diastolic Pressure; We Are Assuming it is Constant Throughout the Experiment
         systolicCapacitance = 65    # This Represents the Systolic Pressure; We Will Use This Value as a Baseline for Other Systolic Pressures
@@ -155,6 +155,9 @@ if __name__ == "__main__":
         if saveInputData:
             saveExcelName = os.path.basename(pulseExcelFile).split(".")[0] + ".xlsx"
             excelDataPulse.saveResults(savingDict, savingPulseInd, saveDataFolder, saveExcelName, sheetName)
+            saveExcelName = os.path.basename(pulseExcelFile).split(".")[0] + "_Data.xlsx"
+            excelDataPulse.saveFilteredData(savingDict, savingPulseInd, saveDataFolder + "Analyzed Data/", saveExcelName, "Filtered Data")
+
     
     
     # ---------------------------------------------------------------------- #
