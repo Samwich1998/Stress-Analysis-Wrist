@@ -124,7 +124,7 @@ class plot:
 
 class signalProcessing:
     
-    def __init__(self):
+    def __init__(self, alreadyFilteredData = False):
         # Indivisial Pulse Information
         self.bloodPulse = {}      # Holder for Each Indivisual Pulse Data
         # Average Blood Pulses
@@ -132,6 +132,7 @@ class signalProcessing:
         # Saving Final pulseNums: Well-Shaped Pulses for Machine Learning
         self.goodPulseNums = []
     
+        self.alreadyFilteredData = alreadyFilteredData
     
     def findLeftMinimum(self, smoothData, startInd):
         """
@@ -224,7 +225,10 @@ class signalProcessing:
         """        
         print("\nSeperating Pulse Data")
         # Smoothen Out the Data to Eliminate Small Peaks (Noise)
-        smoothData = savgol_filter(signalData, 5, 3)
+        if self.alreadyFilteredData:
+            smoothData = signalData
+        else:
+            smoothData = savgol_filter(signalData, 5, 3)
         
         # Take First Derivative of Smoothened Data
         #pulseFit= splrep(time, smoothData, k = 5, s = 0.05) # k = [1,5], Choose 5 for Best Fit; s = Smoothing Factor
@@ -276,7 +280,10 @@ class signalProcessing:
             self.bloodPulse[pulseNum]['pulseData'] = signalData[pulseStartInd:pulseEndInd+1]
             self.bloodPulse[pulseNum]['time'] = time[pulseStartInd:pulseEndInd+1]
             # Normalize Smooth Data Baseline to Zero and Store it Alongside first Derivative
-            self.bloodPulse[pulseNum]["smoothData"] = self.normalizePulseBaseline(smoothData[pulseStartInd:pulseEndInd+1], polynomialDegree = 1)
+            if self.alreadyFilteredData:
+                self.bloodPulse[pulseNum]["smoothData"] = smoothData[pulseStartInd:pulseEndInd+1]
+            else:
+                self.bloodPulse[pulseNum]["smoothData"] = self.normalizePulseBaseline(smoothData[pulseStartInd:pulseEndInd+1], polynomialDegree = 1)
             self.bloodPulse[pulseNum]["firstDer"] = firstDer[pulseStartInd:pulseEndInd+1]
             
             # Perform Peak Detection on Smooth Data
@@ -394,7 +401,7 @@ class signalProcessing:
         
         # Save Final Indices
         self.bloodPulse[pulseNum]['finalInd'] = finalInd
-        
+                
         # If the Systolic, Dicrotic, and Tail Peaks were Found (Don't Need Tidal)
         if systolicPeak and dicroticPeakInd and tailPeak:
             # Perform Gaussian Decomposition on the Data
@@ -511,7 +518,7 @@ class signalProcessing:
             plt.legend(loc='best')
             plt.title("Gaussian Decomposition of Pulse Number " + str(pulseNum))
             plt.show()
-        
+
         # Only Take Pulses with a Good Fit
         if rSquared1 > 0.98 and rSquared2 > 0.98 and coefficient_of_dermination > 0.98 and meanErrorSQ < 1E-2:
             # Keep Track of Good Pules

@@ -64,7 +64,7 @@ if __name__ == "__main__":
     # Pulse Parameters
     if analyzePulse:
         # Specify the Location of the Input Data
-        pulseExcelFile = "./Input Data/Pulse Data/Recover_15.xls" # Path to the Excel Data ('.xls' or '.xlsx')
+        pulseExcelFile = "./Input Data/Pulse Data/20211122 exercise pulse_changhao.xlsx" # Path to the Excel Data ('.xls' or '.xlsx')
         # Required Parameters
         diastolicCapacitance = 112  # This Represents the Diastolic Pressure; We Are Assuming it is Constant Throughout the Experiment
         systolicCapacitance = 65    # This Represents the Systolic Pressure; We Will Use This Value as a Baseline for Other Systolic Pressures
@@ -80,7 +80,9 @@ if __name__ == "__main__":
         if saveInputData:
             saveDataFolder = "./Output Data/Pulse Data/"      # Data Folder to Save the Data; MUST END IN '/'
             sheetName = "Blood Pulse Data"                   # If SheetName Already Exists, Excel Will Add 1 to the end (The Copy Number) 
-    
+        
+        # If Going Second Round
+        alreadyFilteredData = True
     # ---------------------------------------------------------------------- #
     # ---------------------------------------------------------------------- #
     # GSR Parameters
@@ -120,14 +122,15 @@ if __name__ == "__main__":
         # Read Data from Excel
         excelDataPulse = excelProcessing.processPulseData()
         time, signalData = excelDataPulse.getData(pulseExcelFile, testSheetNum = 0)
-        signalData = signalData*10**12 # Get Data into pico-Farad
+        if not alreadyFilteredData:
+            signalData = signalData*10**12 # Get Data into pico-Farad
         
         # Plot the Initial Input Data
         plot = pulseAnalysis.plot()
         plot.plotData(time, signalData, title = "Input Pulse Data")
         
         # Seperate Pulses and Perform Indivisual Analysis
-        dataProcessing = pulseAnalysis.signalProcessing()
+        dataProcessing = pulseAnalysis.signalProcessing(alreadyFilteredData)
         bloodPulse = dataProcessing.sepPulseAnalyze(time, signalData, diastolicCapacitance, systolicCapacitance,
                         minBPM = 30, maxBPM = 220, plotSeperation = plotSeperation, plotGaussFit = plotGaussFit)
         
