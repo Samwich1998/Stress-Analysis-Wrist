@@ -56,8 +56,8 @@ if __name__ == "__main__":
     # ---------------------------------------------------------------------- #
 
     # Specify Which Program to Run; All Can be Run in One Scirpt (NOT Simutaneously Yet)
-    analyzePulse = True
-    analyzeGSR = False
+    analyzePulse = False
+    analyzeGSR = True
     trainModel = False
     # ---------------------------------------------------------------------- #
     # ---------------------------------------------------------------------- #
@@ -88,7 +88,7 @@ if __name__ == "__main__":
     # GSR Parameters
     if analyzeGSR:
         # Specify the Location of the Input Data
-        gsrFile = "./Input Data/Galvanic Skin Response Data/20210525 cold gsr_ehsan.txt"  # Path to the GSR Data ('.txt', '.csv', 'xlsx')
+        gsrFile = "./Input Data/Galvanic Skin Response Data/20211029 cold enzymatic_Changhao.xlsx"  # Path to the GSR Data ('.txt', '.csv', 'xlsx')
         # GSR Parameters
         windowGSR = 5     # Number of Points to Average Together
         # Save GSR Data
@@ -187,7 +187,7 @@ if __name__ == "__main__":
         
         
     # ---------------------------------------------------------------------- #
-    #                         Analyze GSR Data                               #
+    #                          Train the Model                               #
     # ---------------------------------------------------------------------- #
     
     if trainModel:
