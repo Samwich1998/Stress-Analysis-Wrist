@@ -64,13 +64,21 @@ if __name__ == "__main__":
     # Pulse Parameters
     if analyzePulse:
         # Specify the Location of the Input Data
-        pulseExcelFile = "./Input Data/Pulse Data/20211122 exercise pulse_changhao.xlsx" # Path to the Excel Data ('.xls' or '.xlsx')
+        if False:
+            pulseExcelFiles = []
+            for file in os.listdir("./Input Data/Pulse Data/"):
+                if file.endswith(("xlsx", "xls")):
+                    pulseExcelFiles.append(file)
+        else:
+            pulseExcelFiles = ["./Input Data/Pulse Data/20211122 exercise pulse_changhao.xlsx"] # Path to the Excel Data ('.xls' or '.xlsx')
         # Required Parameters
         diastolicCapacitance = 112  # This Represents the Diastolic Pressure; We Are Assuming it is Constant Throughout the Experiment
         systolicCapacitance = 65    # This Represents the Systolic Pressure; We Will Use This Value as a Baseline for Other Systolic Pressures
         # OPTIONAL Parameters to Visualize the Pulse Data
         plotSeperation = False
         plotGaussFit = False
+        # If Filtering Twice
+        alreadyFilteredData = False
         # Average Nearby Pulses (After the Data is Collected)
         combinePulses = False # Reduce Signal Features to One Feature Per pulsePerInterval
         if combinePulses:
@@ -80,9 +88,6 @@ if __name__ == "__main__":
         if saveInputData:
             saveDataFolder = "./Output Data/Pulse Data/"      # Data Folder to Save the Data; MUST END IN '/'
             sheetName = "Blood Pulse Data"                   # If SheetName Already Exists, Excel Will Add 1 to the end (The Copy Number) 
-        
-        # If Going Second Round
-        alreadyFilteredData = True
     # ---------------------------------------------------------------------- #
     # ---------------------------------------------------------------------- #
     # GSR Parameters
@@ -119,50 +124,50 @@ if __name__ == "__main__":
     # ---------------------------------------------------------------------- #
     
     if analyzePulse:
-        # Read Data from Excel
-        excelDataPulse = excelProcessing.processPulseData()
-        time, signalData = excelDataPulse.getData(pulseExcelFile, testSheetNum = 0)
-        if not alreadyFilteredData:
-            signalData = signalData*10**12 # Get Data into pico-Farad
         
-        # Plot the Initial Input Data
-        plot = pulseAnalysis.plot()
-        plot.plotData(time, signalData, title = "Input Pulse Data")
-        
-        # Seperate Pulses and Perform Indivisual Analysis
-        dataProcessing = pulseAnalysis.signalProcessing(alreadyFilteredData)
-        bloodPulse = dataProcessing.sepPulseAnalyze(time, signalData, diastolicCapacitance, systolicCapacitance,
-                        minBPM = 30, maxBPM = 220, plotSeperation = plotSeperation, plotGaussFit = plotGaussFit)
-        
-        if combinePulses:
-            savingDict, savingPulseInd = dataProcessing.combinePulses(pulsePerInterval)
-        else:
-            savingDict = bloodPulse
-            savingPulseInd = dataProcessing.goodPulseNums
-        
-        # Plot a Specific Pulse
-        plotPulse = False
-        if plotPulse:
-            # Specify Number of Plots and Figure Style
-            maxPulsesPlot = 9; numSubPlotsX = 3;
-            figWidth = 25; figHeight = 13;
-            # Create One Plot with Up to First 'maxPulsesPlot' Pulse Curves
-            firstPeakPlotting = 1
-            plot.plotPulses(bloodPulse, numSubPlotsX, firstPeakPlotting, maxPulsesPlot, figWidth, figHeight, finalPlot = True)
+        for pulseExcelFile in pulseExcelFiles:
+            # Read Data from Excel
+            excelDataPulse = excelProcessing.processPulseData()
+            time, signalData = excelDataPulse.getData(pulseExcelFile, testSheetNum = 0)
+            if not alreadyFilteredData:
+                signalData = signalData*10**12 # Get Data into pico-Farad
+            
+            # Plot the Initial Input Data
+            plot = pulseAnalysis.plot()
+            plot.plotData(time, signalData, title = "Input Pulse Data")
+            
+            # Seperate Pulses and Perform Indivisual Analysis
+            dataProcessing = pulseAnalysis.signalProcessing(alreadyFilteredData)
+            bloodPulse = dataProcessing.sepPulseAnalyze(time, signalData, diastolicCapacitance, systolicCapacitance,
+                            minBPM = 30, maxBPM = 220, plotSeperation = plotSeperation, plotGaussFit = plotGaussFit)
+            
+            if combinePulses:
+                savingDict, savingPulseInd = dataProcessing.combinePulses(pulsePerInterval)
+            else:
+                savingDict = bloodPulse
+                savingPulseInd = dataProcessing.goodPulseNums
             
             # Plot a Specific Pulse
-            pulseNum = 4
-            plot.plotPulseNum(bloodPulse, pulseNum = pulseNum, finalPlot = True)
-            
-        # Save Pulse Labels (if Desired)
-        if saveInputData:
-            saveExcelName = os.path.basename(pulseExcelFile).split(".")[0] + ".xlsx"
-            excelDataPulse.saveResults(savingDict, savingPulseInd, saveDataFolder, saveExcelName, sheetName)
-            saveExcelName = os.path.basename(pulseExcelFile).split(".")[0] + "_Data.xlsx"
-            excelDataPulse.saveFilteredData(savingDict, savingPulseInd, saveDataFolder + "Analyzed Data/", saveExcelName, "Filtered Data")
+            plotPulse = False
+            if plotPulse:
+                # Specify Number of Plots and Figure Style
+                maxPulsesPlot = 9; numSubPlotsX = 3;
+                figWidth = 25; figHeight = 13;
+                # Create One Plot with Up to First 'maxPulsesPlot' Pulse Curves
+                firstPeakPlotting = 1
+                plot.plotPulses(bloodPulse, numSubPlotsX, firstPeakPlotting, maxPulsesPlot, figWidth, figHeight, finalPlot = True)
+                
+                # Plot a Specific Pulse
+                pulseNum = 4
+                plot.plotPulseNum(bloodPulse, pulseNum = pulseNum, finalPlot = True)
+                
+            # Save Pulse Labels (if Desired)
+            if saveInputData:
+                saveExcelName = os.path.basename(pulseExcelFile).split(".")[0] + ".xlsx"
+                excelDataPulse.saveResults(savingDict, savingPulseInd, saveDataFolder, saveExcelName, sheetName)
+                saveExcelName = os.path.basename(pulseExcelFile).split(".")[0] + "_Data.xlsx"
+                excelDataPulse.saveFilteredData(savingDict, savingPulseInd, saveDataFolder + "Analyzed Data/", saveExcelName, "Filtered Data")
 
-    
-    
     # ---------------------------------------------------------------------- #
     #                         Analyze GSR Data                               #
     # ---------------------------------------------------------------------- #

@@ -481,7 +481,7 @@ class signalProcessing:
             pars.update(gauss5.make_params())
             pars['g5_amplitude'].set(value = peakAmp[3]/6, min = 0, max = peakAmp[3]/2)
             pars['g5_fwtm'].set(value = x[-1] - peakCenter[3], min = 0, max = x[-1] - peakCenter[2])
-            pars['g5_center'].set(value = min(peakCenter[3]*1.01, x[-1]), min = min(peakCenter[2] + (peakCenter[2] - peakCenter[1]), peakCenter[3]*1.01, x[-1]*.99), max = x[-1])
+            pars['g5_center'].set(value = min(peakCenter[3]*1.05, x[-1]), min = min(peakCenter[2] + (peakCenter[2] - peakCenter[1]), peakCenter[3]*1.05, x[-1]*.99), max = x[-1])
             mod += gauss5
         
         # Get Fit Information
@@ -496,7 +496,7 @@ class signalProcessing:
         # Statistics for Fit
         errorSQ = finalFitInfo.residual[2:-2]**2  # Ignore First/Last 2 Points (Bad EndPoint Fit Given Smoothing)
         meanErrorSQ = np.mean(errorSQ)
-        #print(rSquared1, rSquared2, coefficient_of_dermination, meanErrorSQ)
+        #print(pulseNum, rSquared1, rSquared2, coefficient_of_dermination, meanErrorSQ)
         
         # Plot the Pulse with its Fit 
         def plotGaussianFit():
@@ -518,9 +518,11 @@ class signalProcessing:
             plt.legend(loc='best')
             plt.title("Gaussian Decomposition of Pulse Number " + str(pulseNum))
             plt.show()
-
+        
+        #comps = finalFitInfo.eval_components(x=x)
+        #plotGaussianFit()
         # Only Take Pulses with a Good Fit
-        if rSquared1 > 0.98 and rSquared2 > 0.98 and coefficient_of_dermination > 0.98 and meanErrorSQ < 1E-2:
+        if rSquared1 > 0.98 and rSquared2 > 0.98 and coefficient_of_dermination > 0.98 and meanErrorSQ < 2E-2:
             # Keep Track of Good Pules
             self.goodPulseNums.append(pulseNum)
             # Extract Data From Gaussian's in Fit to Save
