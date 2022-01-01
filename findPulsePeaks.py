@@ -4,9 +4,8 @@
     --------------------------------------------------------------------------
     Program Description:
     
-    Perform signal processing to filter blood pulse peaks. After filtering the data,
-    perform peak detection and seperate the pulss from each other. Extract peaks
-    from each pulse and record the data in an excel spreadsheet. 
+    Perform signal processing to filter blood pulse peaks. Seperate the peaks,
+    and extract key features from each pulse. 
     
     --------------------------------------------------------------------------
     
@@ -14,8 +13,6 @@
         %conda install matplotlib
         %conda install openpyxl
         %conda install numpy
-        %pip install heartpy
-        %pip install neurokit2
         %pip install pyexcel
         %pip install pyexcel-xls
         %pip install pyexcel-xlsx;
@@ -33,21 +30,17 @@
 import os
 import sys
 import numpy as np
-# Machine Learning Modules
-import collections
-from sklearn.model_selection import train_test_split
+from pathlib import Path
 # Import Python Helper Files (And Their Location)
+sys.path.append('./Helper Files/Data Aquisition and Analysis/_Analysis Protocols')  # Folder with All the Helper Files
 sys.path.append('./Helper Files/Data Aquisition and Analysis/')  # Folder with All the Helper Files
 import excelProcessing
 import pulseAnalysis
 import gsrAnalysis
 # Import Machine Learning Files (And They Location)
-sys.path.append("Helper Files/Machine Learning Modules/")
-import ANN
-import KNN                  # Functions for K-Nearest Neighbors' Algorithm
-import SVM                  # Functions for Support Vector Machines Algorithm
-import randomForest         # Functions for the Random Forest Algorithm
-import LogisticRegression   # Functions for Logistic Regression's Algorithm
+sys.path.append("Helper Files/Machine Learning/")
+# Import Files for Machine Learning
+import machineLearningMain  # Class Header for All Machine Learning
 
 
 if __name__ == "__main__":
@@ -56,8 +49,8 @@ if __name__ == "__main__":
     # ---------------------------------------------------------------------- #
 
     # Specify Which Program to Run; All Can be Run in One Scirpt (NOT Simutaneously Yet)
-    analyzePulse = False
-    analyzeGSR = True
+    analyzePulse = True
+    analyzeGSR = False
     trainModel = False
     # ---------------------------------------------------------------------- #
     # ---------------------------------------------------------------------- #
@@ -70,19 +63,12 @@ if __name__ == "__main__":
                 if file.endswith(("xlsx", "xls")):
                     pulseExcelFiles.append(file)
         else:
-            pulseExcelFiles = ["./Input Data/Pulse Data/20211122 exercise pulse_changhao.xlsx"] # Path to the Excel Data ('.xls' or '.xlsx')
-        # Required Parameters
-        diastolicCapacitance = 112  # This Represents the Diastolic Pressure; We Are Assuming it is Constant Throughout the Experiment
-        systolicCapacitance = 65    # This Represents the Systolic Pressure; We Will Use This Value as a Baseline for Other Systolic Pressures
-        # OPTIONAL Parameters to Visualize the Pulse Data
-        plotSeperation = False
+            pulseExcelFiles = ["./Input Data/Pulse Data/Cold Stress/Jiahong - Recover.xls"] # Path to the Excel Data ('.xls' or '.xlsx')
+        # Parameters to Visualize the Pulse Data
+        plotSeperation = True
         plotGaussFit = False
         # If Filtering Twice
         alreadyFilteredData = False
-        # Average Nearby Pulses (After the Data is Collected)
-        combinePulses = False # Reduce Signal Features to One Feature Per pulsePerInterval
-        if combinePulses:
-            pulsePerInterval = 3  # The Number of Seconds for Each Signal. Ex: [0, 4.99999] for pulsePerInterval = 5
         # Saves the Data Analysis: Peak Features for Each Well-Shaped Pulse
         saveInputData = True   
         if saveInputData:
@@ -108,15 +94,16 @@ if __name__ == "__main__":
         trainingDataExcelFolder = "./Input Data/Compiled Data/Stress Test Changhao/Rest&CPT data_Changhao only/Training Data/"
         validationDataExcelFolder = "./Input Data/Compiled Data/Stress Test Changhao/Rest&CPT data_Changhao only/Validation Data/"
         modelPath = "./Helper Files/Machine Learning Modules/Models/myPulseModel.pkl"
-        signalLabelsTitles = ["Not Stressed", "Stressed"]
-        # Specify the ML Model Type
-        applyKNN = False
-        applyNN = False
-        applySVM = False
-        applyRF = True
-        applyLR = False
+        modelType = "RF"  # Machine Learning Options: NN, RF, LR, KNN, SVM
+        machineLearningClasses = ["Not Stressed", "Stressed"]
         # Specify if We Are Saving the Model
         saveModel = False
+        saveDataFolder = trainingDataExcelFolder + "Data Analysis/" + modelType + "/"
+        # Get the Machine Learning Module
+        pulseFeatures = []
+        performMachineLearning = machineLearningMain.predictionModelHead(modelType, modelPath, numFeatures = len(pulseFeatures), gestureClasses = machineLearningClasses, saveDataFolder = saveDataFolder)
+        predictionModel = performMachineLearning.predictionModel
+
     # ---------------------------------------------------------------------- #
     
     # ---------------------------------------------------------------------- #
@@ -137,36 +124,37 @@ if __name__ == "__main__":
             plot.plotData(time, signalData, title = "Input Pulse Data")
             
             # Seperate Pulses and Perform Indivisual Analysis
-            dataProcessing = pulseAnalysis.signalProcessing(alreadyFilteredData)
-            bloodPulse = dataProcessing.sepPulseAnalyze(time, signalData, diastolicCapacitance, systolicCapacitance,
-                            minBPM = 30, maxBPM = 220, plotSeperation = plotSeperation, plotGaussFit = plotGaussFit)
-            
-            if combinePulses:
-                savingDict, savingPulseInd = dataProcessing.combinePulses(pulsePerInterval)
-            else:
-                savingDict = bloodPulse
-                savingPulseInd = dataProcessing.goodPulseNums
-            
-            # Plot a Specific Pulse
-            plotPulse = False
-            if plotPulse:
-                # Specify Number of Plots and Figure Style
-                maxPulsesPlot = 9; numSubPlotsX = 3;
-                figWidth = 25; figHeight = 13;
-                # Create One Plot with Up to First 'maxPulsesPlot' Pulse Curves
-                firstPeakPlotting = 1
-                plot.plotPulses(bloodPulse, numSubPlotsX, firstPeakPlotting, maxPulsesPlot, figWidth, figHeight, finalPlot = True)
-                
-                # Plot a Specific Pulse
-                pulseNum = 4
-                plot.plotPulseNum(bloodPulse, pulseNum = pulseNum, finalPlot = True)
+            dataProcessing = pulseAnalysis.signalProcessing(alreadyFilteredData, plotGaussFit, plotSeperation)
+            dataProcessing.sepPulseAnalyze(time, signalData, minBPM = 30, maxBPM = 220)
+            # Input Feature Labels
+            pulseFeatures = ["timePoint"]
+            pulseFeatures.extend(['systolicPeakTime', 'tidalPeakTime', 'dicroticPeakTime', 'tailPeakTime'])
+            pulseFeatures.extend(['systolicPeakAmp', 'tidalPeakAmp', 'dicroticPeakAmp', 'tailPeakAmp'])
+            pulseFeatures.extend(['systolicPeakVel', 'tidalPeakVel', 'dicroticPeakVel', 'tailPeakVel'])
+            pulseFeatures.extend(['systolicPeakAccel', 'tidalPeakAccel', 'dicroticPeakAccel', 'tailPeakAccel'])
+            pulseFeatures.extend(['systolicGaussAmp', 'tidalGaussAmp', 'dicroticGaussAmp', 'tailGaussAmp'])
+            pulseFeatures.extend(['dicroticNotchInd', 'dicroticNotchTime', 'dicroticNotchAmp', 'dicroticNotchVel', 'dicroticNotchAccel'])
+            pulseFeatures.extend(['pulseDuration', 'systolicTime', 'DiastolicTime', 'leftVentricularPerformance'])
+            pulseFeatures.extend(['pulseArea', 'pulseAreaSquared', 'leftVentricleLoad', 'diastolicArea', 'geometricMean', 'pulseAverage'])
+            pulseFeatures.extend(['areaRatio', 'systolicDicroticNotchAmpRatio', 'systolicDicroticNotchVelRatio', 'systolicDicroticNotchAccelRatio'])
+            pulseFeatures.extend(['systolicTidalAmpRatio', 'systolicDicroticAmpRatio', 'systolicTailAmpRatio', 'dicroticNotchTidalAmpRatio', 'dicroticNotchDicroticAmpRatio', 'dicroticNotchTailAmpRatio'])
+            pulseFeatures.extend(['systolicTidalVelRatio', 'systolicDicroticVelRatio', 'systolicTailVelRatio', 'dicroticNotchTidalVelRatio', 'dicroticNotchDicroticVelRatio', 'dicroticNotchTailVelRatio'])
+            pulseFeatures.extend(['systolicTidalAccelRatio', 'systolicDicroticAccelRatio', 'systolicTailAccelRatio', 'dicroticNotchTidalAccelRatio', 'dicroticNotchDicroticAccelRatio', 'dicroticNotchTailAccelRatio'])
+            pulseFeatures.extend(['systolicToTidal', 'systolicToDicroticNotch', 'systolicToDicrotic', 'systolicToTail', 'dicroticNotchToTidal', 'dicroticNotchToDicrotic', 'dicroticNotchToTail'])
+            pulseFeatures.extend(['pulseEntropy', 'systoleEntropy', 'diastoleEntropy', 'pulseVelEntropy', 'systoleVelEntropy', 'diastoleVelEntropy', 'pulseAccelEntropy', 'systoleAccelEntropy', 'diastoleAccelEntropy'])
+            pulseFeatures.extend(['diastolicPressure', 'systolicPressure', 'pressureRatio', 'pulsePressure'])
+            pulseFeatures.extend(['momentumDensity', 'meanArterialBloodPressure', 'pseudoCardiacOutput', 'pseudoCardiacOutput2', 'pseudoSystemicVascularResistance', 'pseudoStrokeVolume'])
+            pulseFeatures.extend(['maxSystolicVelocity', 'pseudoVelocityAv', 'valveCrossSectionalArea', 'velocityTimeIntegral', 'velocityTimeIntegralABS', 'velocityTimeIntegral_ALT', 'leafletBaseLength', 'valveRadius'])
+            pulseFeatures.extend(['centralAugmentationIndex', 'centralAugmentationIndex_EST', 'reflectionIndex', 'stiffensIndex'])
+            pulseFeatures.extend(['systolicSlopeUp', 'SystolicSlopeDown', 'tidalSlope', 'DicroticNotchSlopeLeft', 'DicroticNotchSlopeRight', 'tailSlope', 'tailSlope2'])
+            sys.exit()
                 
             # Save Pulse Labels (if Desired)
             if saveInputData:
                 saveExcelName = os.path.basename(pulseExcelFile).split(".")[0] + ".xlsx"
-                excelDataPulse.saveResults(savingDict, savingPulseInd, saveDataFolder, saveExcelName, sheetName)
-                saveExcelName = os.path.basename(pulseExcelFile).split(".")[0] + "_Data.xlsx"
-                excelDataPulse.saveFilteredData(savingDict, savingPulseInd, saveDataFolder + "Analyzed Data/", saveExcelName, "Filtered Data")
+                excelDataPulse.saveResults(dataProcessing.featureList, pulseFeatures, saveDataFolder, saveExcelName, sheetName)
+                # saveExcelName = os.path.basename(pulseExcelFile).split(".")[0] + "_Data.xlsx"
+                # excelDataPulse.saveFilteredData(savingDict, savingPulseInd, saveDataFolder + "Analyzed Data/", saveExcelName, "Filtered Data")
 
     # ---------------------------------------------------------------------- #
     #                         Analyze GSR Data                               #
@@ -214,87 +202,70 @@ if __name__ == "__main__":
         Validation_Data = Validation_Data[:][:,0:6]
         signalData = signalData[:][:,0:6]
         headerTitles = headerTitles[0:6]
-        
-        # Split the Data Randomly into Training and Testing Data Sets
-        Training_Data, Testing_Data, Training_Labels, Testing_Labels = train_test_split(signalData, signalLabels, test_size=0.5, shuffle= True, stratify=signalLabels)
-        
-        # Create the Machine Learning Module
-        if applyNN:
-            MLModel = ANN.NeuralNet(modelPath = modelPath, dataDim = len(signalData[0]))
-
-            # If You Want to Loop Through All Options: DONT DO THIS (WORK IN PROGRESS)
-            if False:
-                ANNHelp = ANN.Helpers(modelPath, dataDimension = len(signalData[0]), numClasses = 2)
-                neuralOptimizerList = ANNHelp.neuralPermutations()
-                
-                validationScores = []
-                for model in neuralOptimizerList:
-                    model.trainModel(Training_Data, Training_Labels, Testing_Data, Testing_Labels)
-                    validationScores.append(model.scoreModel(Validation_Data, Validation_Labels))
-
-        if applyKNN:
-            MLModel = KNN.KNN(modelPath = modelPath, numClasses = 2, weight = 'distance')
-        elif applySVM:
-            MLModel = SVM.SVM(modelPath = modelPath, modelType = "linear", polynomialDegree = 5)
-        elif applyRF:
-            MLModel = randomForest.randomForest(modelPath = modelPath)
-        elif applyLR:
-            MLModel = LogisticRegression.logisticRegression(modelPath = modelPath)
-        
-        
-
-        # Train the Classifier (the Model) with the Training Data
-        MLModel.trainModel(Training_Data, Training_Labels, Testing_Data, Testing_Labels, scoreType = "Testing Score:")
-        MLModel.scoreModel(Validation_Data, Validation_Labels, scoreType = "Validation Score:")
-        MLModel.featureImportance(signalData, signalLabels, headerTitles)
-        
-        # Plot the Machine Learning Results
-        MLModel.accuracyDistributionPlot(signalData, signalLabels, MLModel.predictData(signalData), signalLabelsTitles)
-        #map2D = MLModel.mapTo2DPlot(signalData, signalLabels) # Plot the Classification in 2D Map
-        
-        # Find the Class Data Distribution in the Total Training/Testing Set
-        classDistribution = collections.Counter(signalLabels)
-        print("Class Distribution:", classDistribution)
-        print("Number of Classes Found = ", len(classDistribution))
-
-        # Save the Classifier: if Desired
+                    
+        # Train the Data on the Gestures
+        performMachineLearning.trainModel(signalData, signalLabels, pulseFeatures)
+        # Save Signals and Labels
+        if False and performMachineLearning.map2D:
+            saveInputs = excelProcessing.saveExcel()
+            saveExcelNameMap = Path(saveExcelName).stem + "_mapedData.xlsx" #"Signal Features with Predicted and True Labels New.xlsx"
+            saveInputs.saveLabeledPoints(performMachineLearning.map2D, signalLabels,  performMachineLearning.predictionModel.predictData(signalData), saveDataFolder, saveExcelNameMap, sheetName = "Signal Data and Labels")
+        # Save the Neural Network (The Weights of Each Edge)
         if saveModel:
-            MLModel.saveModel(modelPath)
-        
-        
-
+            modelPathFolder = os.path.dirname(modelPath)
+            os.makedirs(modelPathFolder, exist_ok=True)
+            performMachineLearning.predictionModel.saveModel(modelPath)
     
-"""
-# Extra Options to Extract Signal Information
-import heartpy as hp
-import neurokit2 as nk
+        
 
-    # ---------------------------------------------------------------------- #
-    #                    Extract Body Parameters from Signals                #
-    # ---------------------------------------------------------------------- #
-    # Not Fully Developed Yet (Accuracy NOT Tested), But Can be Useful in the Future
-    getBodyParam = False
-    if getBodyParam:
-        import numpy as np
-        from mpl_toolkits.mplot3d import Axes3D # <--- This is important for 3d plotting: DONT REMOVE DESPITE WARNING
-        
-        # Get Corrected Baseline Data
-        filterData = []
-        for pulseNum in bloodPulse:
-            filterData.extend(list(bloodPulse[pulseNum]["smoothData"][:-1]))
-        filterData = np.array(filterData)
-        # Get Sampling Rate
-        samplingRate = hp.get_samplerate_mstimer(time)/1000 # Calculate the Sampling Rate
-        
-        # Data Analysis: User Parameters from the Data
-        working_data, measures = hp.process(filterData, sample_rate = samplingRate, high_precision=True, windowsize=2)
-        hp.plotter(working_data, measures, show=True, title='Heart Beat Detection on Noisy Signal', moving_average=True)
-        #display measures computed
-        for measure in measures.keys():
-            print('%s: %f' %(measure, measures[measure]))
-        
-        # Show Complexity of the Signal
-        parameters = nk.complexity_optimize(filterData, show=True)
-        
-pulseNum = 17; window = 10; x = bloodPulse[pulseNum]['time']; y = bloodPulse[pulseNum]['pulseData']; smoothY = bloodPulse[pulseNum]['smoothData']; fftY = scipy.fft(smoothY); plt.plot(x[1:],smoothY[0]+fftY[1:]-fftY[1]); plt.plot(x,smoothY)
+"""
+# --------- Analyze the Effect of Multiple Runs
+
+from scipy import stats
+import matplotlib.pyplot as plt
+signalData = np.array(signalData); signalLabels = np.array(signalLabels)
+
+#featureList1 = dataProcessing.featureList  # Rest
+#featureList2 = dataProcessing.featureList  # Cold
+#featureList3 = dataProcessing.featureList  # Recover
+
+time1 = featureList1[:, 0]
+time2 = featureList2[:, 0]
+time3 = featureList3[:, 0]
+
+for featureInd in range(len(pulseFeatures)):
+    fig = plt.figure()
+
+    allFeatures1 = featureList1[:,featureInd]
+    allFeatures2 = featureList2[:,featureInd]
+    allFeatures3 = featureList3[:,featureInd]
+    allFeatures = [allFeatures1, allFeatures2, allFeatures3]
+    
+    time = [time1, time2, time3]
+    
+    colors = ['ko', 'ro', 'bo', 'go', 'mo']
+    for ind, averageTogether in enumerate([60*0.5]):
+        features = [[] for _ in range(len(allFeatures))]
+        for fileInd, allFeaturesI in enumerate(allFeatures):
+            for pointInd in range(len(allFeaturesI)):
+                featureInterval = allFeaturesI[time[fileInd] > time[fileInd][pointInd] - averageTogether]
+                timeMask = time[fileInd][time[fileInd] > time[fileInd][pointInd] - averageTogether]
+                featureInterval = featureInterval[timeMask <= time[fileInd][pointInd]]
+    
+                featute = stats.trim_mean(featureInterval, 0.3)
+                features[fileInd].append(featute)
+
+        plt.plot(time1, features[0], colors[0], markersize=5)
+        plt.plot(time2, features[1], colors[1], markersize=5)
+        plt.plot(time3, features[2], colors[2], markersize=5)
+
+
+    plt.xlabel("Time (Seconds)")
+    plt.ylabel(pulseFeatures[featureInd])
+    #plt.vlines(np.array([1, 2, 3, 4, 5])*60*6, min(min(features))*0.8, max(max(features))*1.2, 'g', zorder=100)
+    plt.legend(['Rest', 'Cold', "Recover"])
+    plt.title("Averaged Together: " + str(averageTogether) + " Seconds")
+    fig.savefig('./Jiahong Cold/Compare/' + pulseFeatures[featureInd] + ".png", dpi=300, bbox_inches='tight')
+    plt.show()
+# -----------
 """

@@ -157,23 +157,24 @@ class processPulseData(dataProcessing):
         return np.array(data["time"]), np.array(data["Capacitance"])
 
 
-    def saveResults(self, bloodPulse, pulseNumSaving, saveDataFolder, saveExcelName, sheetName = "Blood Pulse Decomposed"):
+    def saveResults(self, featureList, featureLabels, saveDataFolder, saveExcelName, sheetName = "Pulse Features"):
         print("Saving the Data")
-        # Create Output File Directory to Save Data: If Not Already Created
+        # Create Output File Directory to Save Data: If None Exists
         os.makedirs(saveDataFolder, exist_ok=True)
         
-        # Create Path to Save the Excel File
-        excel_file = saveDataFolder + saveExcelName
+        # Path to File to Save
+        excelFile = saveDataFolder + saveExcelName
         
-        # If the File is Not Present: Create it
-        if not os.path.isfile(excel_file):
+        # If the File is Not Present: Create The Excel File
+        if not os.path.isfile(excelFile):
+            print("\tSaving the Data as New Excel Workbook")
             # Make Excel WorkBook
             WB = xl.Workbook()
             WB_worksheet = WB.active 
             WB_worksheet.title = sheetName
         else:
             print("Excel File Already Exists. Adding New Sheet to File")
-            WB = xl.load_workbook(excel_file)
+            WB = xl.load_workbook(excelFile, read_only=False)
             WB_worksheet = WB.create_sheet(sheetName)
         
         # Label First Row
@@ -184,37 +185,49 @@ class processPulseData(dataProcessing):
         header.extend(["", 'Gaussian Systolic Time From Start', 'Gaussian Tidal Wave Time From Systolic', 'Gaussian Dicrotic Time From Tidal Wave',
                   'Gaussian Tail Wave Time From Dicrotic', 'Gaussian End Time From Tail Wave', 'Gaussian Systolic Peak Amplitude', 'Gaussian Tidal Wave Peak Ampltiude',
                   "Gaussian Dicrotic Peak Amplitude", 'Gaussian Tail Wave Peak Ampltitude'])
-        WB_worksheet.append(header)
+        
+        # Parameters for Worksheet
+        header = featureLabels    # Header Text     
+        maxAddToExcelSheet = 1048500  # Max Rows in a Worksheet
         
         # Save Data to Worksheet
-        for pulseNum in pulseNumSaving:
-            # Write the Data to Excel
-            WB_worksheet.append(bloodPulse[pulseNum]["Results to Save"])
-        
-        # Add Excel Aesthetics
-        WB_worksheet = self.addExcelAesthetics(WB_worksheet)            
+        for dataStart in range(0, len(featureList), maxAddToExcelSheet):
+            # Add the Header to the Worksheet
+            WB_worksheet.append(header)
             
+            # Add the Features to the Worksheet
+            for feature in featureList:
+                WB_worksheet.append(feature)
+        
+            # Add Excel Aesthetics
+            WB_worksheet = self.addExcelAesthetics(WB_worksheet)  
+            
+            # Add Sheet
+            WB_worksheet = WB.create_sheet(sheetName)
+        
+        WB.remove(WB_worksheet)
         # Save as New Excel File
-        WB.save(excel_file)
+        WB.save(excelFile)
         WB.close()
     
     def saveFilteredData(self, bloodPulse, pulseNumSaving, saveDataFolder, saveExcelName, sheetName = "Blood Pulse Data"):
         print("Saving the Data")
-        # Create Output File Directory to Save Data: If Not Already Created
+        # Create Output File Directory to Save Data: If None Exists
         os.makedirs(saveDataFolder, exist_ok=True)
         
-        # Create Path to Save the Excel File
-        excel_file = saveDataFolder + saveExcelName
+        # Path to File to Save
+        excelFile = saveDataFolder + saveExcelName
         
-        # If the File is Not Present: Create it
-        if not os.path.isfile(excel_file):
+        # If the File is Not Present: Create The Excel File
+        if not os.path.isfile(excelFile):
+            print("\tSaving the Data as New Excel Workbook")
             # Make Excel WorkBook
             WB = xl.Workbook()
             WB_worksheet = WB.active 
             WB_worksheet.title = sheetName
         else:
             print("Excel File Already Exists. Adding New Sheet to File")
-            WB = xl.load_workbook(excel_file)
+            WB = xl.load_workbook(excelFile, read_only=False)
             WB_worksheet = WB.create_sheet(sheetName)
         
         # Label First Row
@@ -236,7 +249,7 @@ class processPulseData(dataProcessing):
         WB_worksheet = self.addExcelAesthetics(WB_worksheet)  
         
         # Save as New Excel File
-        WB.save(excel_file)
+        WB.save(excelFile)
         WB.close()
             
 
@@ -349,17 +362,17 @@ class processGSRData(dataProcessing):
         os.makedirs(saveDataFolder, exist_ok=True)
         
         # Create Path to Save the Excel File
-        excel_file = saveDataFolder + saveExcelName
+        excelFile = saveDataFolder + saveExcelName
         
         # If the File is Not Present: Create it
-        if not os.path.isfile(excel_file):
+        if not os.path.isfile(excelFile):
             # Make Excel WorkBook
             WB = xl.Workbook()
             WB_worksheet = WB.active 
             WB_worksheet.title = sheetName
         else:
             print("Excel File Already Exists. Adding New Sheet to File")
-            WB = xl.load_workbook(excel_file)
+            WB = xl.load_workbook(excelFile)
             WB_worksheet = WB.create_sheet(sheetName)
         
         # Label First Row
@@ -378,7 +391,7 @@ class processGSRData(dataProcessing):
         WB_worksheet = self.addExcelAesthetics(WB_worksheet)    
             
         # Save as New Excel File
-        WB.save(excel_file)
+        WB.save(excelFile)
         WB.close()
 
 
