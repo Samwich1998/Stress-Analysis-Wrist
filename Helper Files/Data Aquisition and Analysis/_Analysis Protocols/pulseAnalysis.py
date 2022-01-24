@@ -215,7 +215,7 @@ class signalProcessing:
             plt.plot(time[systolicPeaks], firstDer[systolicPeaks], 'o', label = "Mid-Pulse Rise Identification")
             plt.legend(loc=9, bbox_to_anchor=(1.35, 1));
             plt.hlines(0,time[0], time[-1])
-            #plt.xlim(0,1)
+            #plt.xlim(3,5)
             plt.show()
         # ------------------------------------------------------------------- #
                     
@@ -272,8 +272,8 @@ class signalProcessing:
             # Reste for Next Pulse
             pulseStartInd = pulseEndInd
         # ------------------------------------------------------------------- #
-        plt.plot(self.heartRateListAverage, 'k-', linewidth=2)
-        plt.show()
+        # plt.plot(self.heartRateListAverage, 'k-', linewidth=2)
+        # plt.show()
     
     def extractPulsePeaks(self, pulseTime, normalizedPulse, pulseVelocity, pulseAcceleration):
         
@@ -334,11 +334,11 @@ class signalProcessing:
         
         # ------------------------- Cull Bad Pulses ------------------------- #
         # Check Systolic Peaks
-        if systolicPeakInd < systolicUpstrokeAccelMinInd < systolicUpstrokeVelInd < systolicUpstrokeAccelMaxInd:
+        if not systolicUpstrokeAccelMaxInd < systolicUpstrokeVelInd < systolicUpstrokeAccelMinInd < systolicPeakInd:
             print("Bad Systolic Sequence. THIS SHOULD NOT HAPPEN"); return None
-        elif afterTidalVelMinInd < tidalEndInd < tidalPeakInd < tidalStartInd < beforeTidalVelMinInd:
+        elif not beforeTidalVelMinInd < tidalStartInd < tidalPeakInd < tidalEndInd < afterTidalVelMinInd:
             print("Bad Tidal Sequence. THIS SHOULD NOT HAPPEN"); return None
-        elif dicroticFallVelMinInd < dicroticPeakInd < dicroticRiseVelMaxInd < dicroticNotchInd:
+        elif not dicroticNotchInd < dicroticRiseVelMaxInd < dicroticPeakInd < dicroticFallVelMinInd:
             print("Bad Dicrotic Sequence. THIS SHOULD NOT HAPPEN"); return None
         # ------------------------------------------------------------------- #
         

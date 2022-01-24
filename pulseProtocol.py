@@ -63,7 +63,7 @@ if __name__ == "__main__":
                 if file.endswith(("xlsx", "xls")):
                     pulseExcelFiles.append(file)
         else:
-            pulseExcelFiles = ["./Input Data/Pulse Data/Increasing Sampling Frequency/4.xls"] # Path to the Excel Data ('.xls' or '.xlsx')
+            pulseExcelFiles = ["./Input Data/Pulse Data/Increasing Sampling Frequency/6.xls"] # Path to the Excel Data ('.xls' or '.xlsx')
         # Parameters to Visualize the Pulse Data
         plotSeperation = True
         plotGaussFit = False
@@ -125,7 +125,7 @@ if __name__ == "__main__":
             
             # Seperate Pulses and Perform Indivisual Analysis
             dataProcessing = pulseAnalysis.signalProcessing(alreadyFilteredData, plotGaussFit, plotSeperation)
-            a = dataProcessing.analyzePulse(time, signalData, minBPM = 30, maxBPM = 220)
+            a = dataProcessing.analyzePulse(time, signalData, minBPM = 30, maxBPM = 180)
             # Input Feature Labels
             pulseFeatures = ["timePoint"]
             # Saving Features from Section: Extract Data from Peak Inds
