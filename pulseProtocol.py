@@ -63,10 +63,10 @@ if __name__ == "__main__":
                 if file.endswith(("xlsx", "xls")):
                     pulseExcelFiles.append(file)
         else:
-            pulseExcelFiles = ["./Input Data/Pulse Data/Increasing Sampling Frequency/6.xls"] # Path to the Excel Data ('.xls' or '.xlsx')
+            pulseExcelFiles = ["./Input Data/Pulse Data/20220112 CPT/62.xls"] # Path to the Excel Data ('.xls' or '.xlsx')
         # Parameters to Visualize the Pulse Data
         plotSeperation = True
-        plotGaussFit = False
+        plotGaussFit = True
         # If Filtering Twice
         alreadyFilteredData = False
         # Saves the Data Analysis: Peak Features for Each Well-Shaped Pulse

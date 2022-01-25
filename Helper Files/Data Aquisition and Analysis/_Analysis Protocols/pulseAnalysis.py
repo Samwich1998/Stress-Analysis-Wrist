@@ -305,41 +305,28 @@ class signalProcessing:
         dicroticRiseVelMaxInd = self.findNearbyMaximum(pulseVelocity, dicroticNotchInd, binarySearchWindow = 2, maxPointsSearch = int(len(pulseTime)/2))
         dicroticFallVelMinInd = self.findNearbyMinimum(pulseVelocity, dicroticRiseVelMaxInd, binarySearchWindow = 2, maxPointsSearch = int(len(pulseTime)/2))
         # ------------------------------------------------------------------- #
-
-        # # ---------------------- Detect Tail Wave Peak ---------------------- #
-        # tailPeak1 = None
-        # tailPeak2 = None
-        # velPeakInds = scipy.signal.find_peaks(pulseVelocity[dicroticPeakInd + 2:], prominence = 10E-5, distance = self.minPeakIndSep)[0]
-        # peakInds = scipy.signal.find_peaks(normalizedPulse[dicroticPeakInd + 2:], distance = self.minPeakIndSep)[0]
-        # # If There is a Dicrotic Peak, Look for Tail Peak (Else, It is Worthless to Check; Bad Pulse)
-        # if dicroticPeakInd:
-        #     # Get Possible Tail Wave Peaks AFTER First Gradient Hump Thats AFTER Dicrotic
-        #     derivTail = velPeakInds[velPeakInds > dicroticPeakInd + self.minPeakIndSep]
-        #     if len(derivTail) > 0:
-        #         tailPeaks = peakInds[peakInds > derivTail[0]]
-        #     else:
-        #         tailPeaks = peakInds[peakInds > dicroticPeakInd + self.minPeakIndSep]
-        #     # Get the Maximum Tail Peak (Small Weight to Take One Further Out) and Label it Tail Peak
-        #     tailPeak1 = max(tailPeaks, key = lambda tailInd: normalizedPulse[tailInd] + tailInd/(6*peakInds[-1]), default=None)
-        #     # If No peakInds After the Dicrotic Peak, Use the Gradient to Find Tail Peak Hump
-        #     if not tailPeak1 and len(peakInds) != 0:
-        #         tailPeak1 = max(derivTail, key = lambda tailInd: normalizedPulse[tailInd] + tailInd/(6*peakInds[-1]), default=None) 
-        #     elif tailPeak1:
-        #         tailPeaks = tailPeaks[tailPeak1 < tailPeaks]
-        #         if len(tailPeaks) != 0:
-        #             tailPeak2 = tailPeaks[0]
-        # if not tailPeak1:
-        #     tailPeak1 = dicroticNotchInd + int(3*(len(normalizedPulse) - dicroticNotchInd)/4)
-        # # ------------------------------------------------------------------- #
         
         # ------------------------- Cull Bad Pulses ------------------------- #
-        # Check Systolic Peaks
+        # Check The Order of the Systolic Peaks
         if not systolicUpstrokeAccelMaxInd < systolicUpstrokeVelInd < systolicUpstrokeAccelMinInd < systolicPeakInd:
-            print("Bad Systolic Sequence. THIS SHOULD NOT HAPPEN"); return None
+            #print("Bad Systolic Sequence. Time = ", self.timePoint);
+            return None
+        # Check The Order of the Tidal Peaks
         elif not beforeTidalVelMinInd < tidalStartInd < tidalPeakInd < tidalEndInd < afterTidalVelMinInd:
-            print("Bad Tidal Sequence. THIS SHOULD NOT HAPPEN"); return None
+            #print("Bad Tidal Sequence. Time = ", self.timePoint);
+            return None
+        # Check The Order of the Dicrotic Peaks
         elif not dicroticNotchInd < dicroticRiseVelMaxInd < dicroticPeakInd < dicroticFallVelMinInd:
-            print("Bad Dicrotic Sequence. THIS SHOULD NOT HAPPEN"); return None
+            #print("Bad Dicrotic Sequence. Time = ", self.timePoint);
+            return None
+            
+        # Check If the Dicrotic Peak was Skipped
+        if pulseTime[-1]*0.7 < pulseTime[dicroticPeakInd] - pulseTime[systolicUpstrokeAccelMaxInd]:
+            #print("Dicrotic Peak Likely Skipped Over. Time = ", self.timePoint);
+            return None
+        if 0.2 < pulseTime[afterTidalVelMinInd] - pulseTime[beforeTidalVelMinInd]:
+            #print("Tidal Interval is TOO Large. Time = ", self.timePoint);
+            return None
         # ------------------------------------------------------------------- #
         
         # ----------------------- Feature Extraction ------------------------ #
@@ -387,6 +374,8 @@ class signalProcessing:
             plt.plot(pulseTime[dicroticPeakInd], normalizedPulse1[dicroticPeakInd],  'bo')
             
             plt.plot(pulseTime[[dicroticRiseVelMaxInd, dicroticFallVelMinInd]], normalizedPulse1[[dicroticRiseVelMaxInd, dicroticFallVelMinInd]],  'bo')
+            
+            plt.title("Time: " + str(self.timePoint))
             plt.show()
     
     
@@ -850,6 +839,30 @@ class signalProcessing:
                     elif firstDer[systolicPeaks[-1]] < firstDer[pointInd]:
                         systolicPeaks[-1] = pointInd
                     lastPeakRise = pointInd
+                    
+        # tailPeak1 = None
+        # tailPeak2 = None
+        # velPeakInds = scipy.signal.find_peaks(pulseVelocity[dicroticPeakInd + 2:], prominence = 10E-5, distance = self.minPeakIndSep)[0]
+        # peakInds = scipy.signal.find_peaks(normalizedPulse[dicroticPeakInd + 2:], distance = self.minPeakIndSep)[0]
+        # # If There is a Dicrotic Peak, Look for Tail Peak (Else, It is Worthless to Check; Bad Pulse)
+        # if dicroticPeakInd:
+        #     # Get Possible Tail Wave Peaks AFTER First Gradient Hump Thats AFTER Dicrotic
+        #     derivTail = velPeakInds[velPeakInds > dicroticPeakInd + self.minPeakIndSep]
+        #     if len(derivTail) > 0:
+        #         tailPeaks = peakInds[peakInds > derivTail[0]]
+        #     else:
+        #         tailPeaks = peakInds[peakInds > dicroticPeakInd + self.minPeakIndSep]
+        #     # Get the Maximum Tail Peak (Small Weight to Take One Further Out) and Label it Tail Peak
+        #     tailPeak1 = max(tailPeaks, key = lambda tailInd: normalizedPulse[tailInd] + tailInd/(6*peakInds[-1]), default=None)
+        #     # If No peakInds After the Dicrotic Peak, Use the Gradient to Find Tail Peak Hump
+        #     if not tailPeak1 and len(peakInds) != 0:
+        #         tailPeak1 = max(derivTail, key = lambda tailInd: normalizedPulse[tailInd] + tailInd/(6*peakInds[-1]), default=None) 
+        #     elif tailPeak1:
+        #         tailPeaks = tailPeaks[tailPeak1 < tailPeaks]
+        #         if len(tailPeaks) != 0:
+        #             tailPeak2 = tailPeaks[0]
+        # if not tailPeak1:
+        #     tailPeak1 = dicroticNotchInd + int(3*(len(normalizedPulse) - dicroticNotchInd)/4)
 """
     
     
