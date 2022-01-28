@@ -2,6 +2,7 @@
 # Basic Modules
 import math
 import numpy as np
+from bisect import bisect
 from scipy.stats.mstats import gmean
 # Peak Detection
 import scipy
@@ -16,10 +17,7 @@ from sklearn.metrics import r2_score
 # Matlab Plotting API
 import matplotlib as mpl
 import matplotlib.pyplot as plt
-# Feature Extraction
-from scipy.stats import skew
-from scipy.stats import entropy
-from scipy.stats import kurtosis
+
 
 class plot:
     
@@ -122,12 +120,13 @@ class signalProcessing:
             plotGaussFit: Display the Gaussian Decomposition of Each Pulse
         ----------------------------------------------------------------------
         """
-        # Storing Features
+        # Feature Tracking Parameters
+        self.timeOffset = 0             # Store the Time Offset Between Files
         self.featureList = []           # List of Lists of Features; Each Index Represents a Pulse; Each Pulse's List Represents its Features
-        # Heart Rate Parameters
-        self.numPulsesAverageHR = 30    # The Number of Pulses to Consider When Taking the Average Heart Rate
+        self.numSecondsAverage = 10     # The Number of Pulses to Consider When Taking the Average Heart Rate
+        self.incomingPulseTimes = []    # An Ongoing List Representing the Times of Each Pulse's Peak
         self.heartRateListAverage = []  # An Ongoing List Representing the Heart Rate
-        
+
         # Peak Seperation Parameters
         self.peakStandard = 0;          # The Max First Deriviative of the Previous Pulse's Systolic Peak
         self.peakStandardInd = 0        # The Index of the Max Derivative in the Previous Pulse's Systolic Peak
@@ -160,7 +159,7 @@ class signalProcessing:
             if firstDerVal > self.peakStandard*0.5:
                 
                 # Use the First Few Peaks as a Standard
-                if 1.5 < time[pointInd]:
+                if 1.5 < time[pointInd] or (self.timeOffset != 0 and self.minPointsPerPulse < pointInd):
                     # If the Point is Sufficiently Far Away, its a New R-Peak
                     if self.peakStandardInd + self.minPointsPerPulse < pointInd:
                         systolicPeaks.append(pointInd)
@@ -220,17 +219,21 @@ class signalProcessing:
         # ------------------------------------------------------------------- #
                     
         # -------------------------- Pulse Analysis ------------------------- #
-        print("Analyzing Pulses")
+        print("\tAnalyzing Pulses")
+        self.peakStandardInd = 0 # Reset  from Last File
         # Seperate Peaks Based on the Minimim Before the R-Peak Rise
         pulseStartInd = self.findNearbyMinimum(signalData, systolicPeaks[0], binarySearchWindow=-1, maxPointsSearch=self.maxPointsPerPulse)
         for pulseNum in range(1, len(systolicPeaks)):
             pulseEndInd = self.findNearbyMinimum(signalData, systolicPeaks[pulseNum], binarySearchWindow=-1, maxPointsSearch=self.maxPointsPerPulse)
-            self.timePoint = time[pulseEndInd]
+            self.timePoint = time[pulseEndInd] + self.timeOffset
             
             # -------------------- Calculate Heart Rate --------------------- #
-            # Average Heart Rate
-            numPulsesAverageHR = min(pulseNum, self.numPulsesAverageHR)
-            self.heartRateListAverage.append(numPulsesAverageHR*60/(time[systolicPeaks[pulseNum]] - time[systolicPeaks[pulseNum - numPulsesAverageHR]]))
+            # Save the Pulse's Time
+            self.incomingPulseTimes.append(self.timePoint)
+                        
+            # Average Heart Rate in Time
+            numPulsesAverage = len(self.incomingPulseTimes) - bisect(self.incomingPulseTimes, self.timePoint - self.numSecondsAverage)
+            self.heartRateListAverage.append(numPulsesAverage*60/self.numSecondsAverage)
             # --------------------------------------------------------------- #
             
             # ---------------------- Cull Bad Pulses ------------------------ #
@@ -272,7 +275,10 @@ class signalProcessing:
             # Reste for Next Pulse
             pulseStartInd = pulseEndInd
         # ------------------------------------------------------------------- #
+        self.timeOffset += time[-1]
+        
         # plt.plot(self.heartRateListAverage, 'k-', linewidth=2)
+        # plt.ylim(60, 100)
         # plt.show()
     
     def extractPulsePeaks(self, pulseTime, normalizedPulse, pulseVelocity, pulseAcceleration):
@@ -353,9 +359,9 @@ class signalProcessing:
             pulseAcceleration1 = pulseAcceleration/max(pulseAcceleration)
             
             
-            plt.plot(pulseTime, normalizedPulse1)
-            plt.plot(pulseTime, pulseVelocity1)
-            plt.plot(pulseTime, pulseAcceleration1)
+            plt.plot(pulseTime, normalizedPulse1, linewidth = 2, color = "black")
+            plt.plot(pulseTime, pulseVelocity1, alpha=0.5)
+            plt.plot(pulseTime, pulseAcceleration1, alpha=0.5)
             
             plt.plot(pulseTime[systolicPeakInd], normalizedPulse1[systolicPeakInd],  'ko')
             plt.plot(pulseTime[systolicUpstrokeVelInd], normalizedPulse1[systolicUpstrokeVelInd],  'ko')
