@@ -70,11 +70,17 @@ if __name__ == "__main__":
             pulseExcelFiles = natsorted(pulseExcelFiles)
         else:
             pulseExcelFiles = ["./Input Data/Pulse Data/20220112 CPT/62.xls"] # Path to the Excel Data ('.xls' or '.xlsx')
+        
         # Parameters to Visualize the Pulse Data
         plotSeperation = False
         plotGaussFit = False
+        
         # If Filtering Twice
         alreadyFilteredData = False
+        
+        # Plot the Features in Time
+        analyzeFeatures = True
+        
         # Saves the Data Analysis: Peak Features for Each Well-Shaped Pulse
         saveInputData = True   
         if saveInputData:
@@ -153,7 +159,7 @@ if __name__ == "__main__":
         
         # Saving Features from Section: Time Features
         pulseFeatures.extend(['pulseDuration', 'systolicTime', 'DiastolicTime', 'leftVentricularPerformance'])
-        pulseFeatures.extend(['maxDerivToSystolic', 'systolicToTidal', 'systolicToDicroticNotch', 'systolicToDicrotic', 'dicroticNotchToTidal', 'dicroticNotchToDicrotic'])
+        pulseFeatures.extend(['maxDerivToSystolic', 'systolicToTidal', 'systolicToDicroticNotch', 'dicroticNotchToTidal', 'dicroticNotchToDicrotic'])
         pulseFeatures.extend(['systolicUpSlopeTime', 'tidalPeakInterval', 'outerTidalInterval', 'midToEndTidal', 'tidalToDicroticVelPeakInterval'])
 
         # Saving Features from Section: Under the Curve Features
@@ -175,9 +181,10 @@ if __name__ == "__main__":
         pulseFeatures.extend(['centralAugmentationIndex', 'centralAugmentationIndex_EST', 'reflectionIndex', 'stiffensIndex'])
         # sys.exit()
              
-        dataProcessing.featureList = np.array(dataProcessing.featureList)
-        analyzeFeatures = featureAnalysis.featureAnalysis(dataProcessing.featureList[:,0], dataProcessing.featureList[:,1:], pulseFeatures[1:], [1110, 1110+60*3], saveDataFolder)
-        analyzeFeatures.singleFeatureAnalysis()
+        if analyzeFeatures:
+            dataProcessing.featureList = np.array(dataProcessing.featureList)
+            analyzeFeatures = featureAnalysis.featureAnalysis(dataProcessing.featureList[:,0], dataProcessing.featureList[:,1:], pulseFeatures[1:], [1110, 1110+60*3], saveDataFolder)
+            analyzeFeatures.singleFeatureAnalysis()
         
         sys.exit()
         # Save Pulse Labels (if Desired)

@@ -9,7 +9,9 @@ Created on Wed Oct 20 18:47:49 2021
 import os
 import numpy as np
 from scipy import stats
+from copy import copy, deepcopy
 # Modules for Plotting
+import seaborn as sns
 import matplotlib.pyplot as plt
 
 
@@ -75,7 +77,41 @@ class featureAnalysis:
             plt.cla()
             plt.clf()
             
-            
+    
+    def correlationMatrix(self):
+        # Perform Deepcopy to Not Edit Features
+        signalData = deepcopy(self.featureList); signalLabels = deepcopy(self.featureNames)
+        
+        # Standardize the Feature
+        for i in range(len(signalData[0])):
+             signalData[:,i] = (signalData[:,i] - np.mean(signalData[:,i]))/np.std(signalData[:,i], ddof=1)
+        
+        matrix = np.array(np.corrcoef(signalData.T)); 
+        sns.set_theme(); ax = sns.heatmap(matrix, cmap='icefire', xticklabels=signalLabels, yticklabels=signalLabels)
+        
+        # Cluster the Similar Features
+        signalLabelsX = deepcopy(signalLabels)
+        signalLabelsY = deepcopy(signalLabels)
+        for i in range(1,len(matrix)):
+            signalLabelsX = signalLabelsX[matrix[:,i].argsort()]
+            matrix = matrix[matrix[:,i].argsort()]
+        for i in range(1,len(matrix[0])):
+            signalLabelsY = signalLabelsY[matrix[i].argsort()]
+            matrix = matrix [ :, matrix[i].argsort()]
+        # Plot the New Cluster
+        sns.set_theme(); ax = sns.heatmap(matrix, cmap='icefire', xticklabels=signalLabelsX, yticklabels=signalLabelsY)
+        # Save the Figure
+        sns.set(rc={'figure.figsize':(50,35)})
+        fig = ax.get_figure(); fig.savefig("../output.png", dpi=300)
+        
+        # Remove Small Correlations
+        for i in range(len(matrix)):
+            for j in range(len(matrix)):
+                if abs(matrix[i][j]) < 0.96:
+                    matrix[i][j] = 0
+        # Plot the New Correlations
+        sns.set_theme(); ax = sns.heatmap(matrix, cmap='icefire', xticklabels=signalLabelsX, yticklabels=signalLabelsY)
+                    
             
             
             
