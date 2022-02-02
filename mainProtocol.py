@@ -32,10 +32,12 @@ import sys
 import numpy as np
 from pathlib import Path
 from natsort import natsorted
-# Import Python Helper Files (And Their Location)
-sys.path.append('./Helper Files/Data Aquisition and Analysis/_Analysis Protocols')  # Folder with All the Helper Files
+# Import Data Extraction Files (And Their Location)
 sys.path.append('./Helper Files/Data Aquisition and Analysis/')  # Folder with All the Helper Files
 import excelProcessing
+# Import Analysis Files (And Their Locations)
+sys.path.append('./Helper Files/Data Aquisition and Analysis/_Analysis Protocols')  # Folder with All the Helper Files
+import chemicalAnalysis
 import pulseAnalysis
 import gsrAnalysis
 # Import Machine Learning Files (And They Location)
@@ -49,10 +51,10 @@ if __name__ == "__main__":
     # ---------------------------------------------------------------------- #
     #    User Parameters to Edit (More Complex Edits are Inside the Files)   #
     # ---------------------------------------------------------------------- #
-    sys.exit()
 
     # Specify Which Program to Run; All Can be Run in One Scirpt (NOT Simutaneously Yet)
-    analyzePulse = True
+    analyzePulse = False
+    analyzeChemical = True
     analyzeGSR = False
     trainModel = False
     # ---------------------------------------------------------------------- #
@@ -65,7 +67,7 @@ if __name__ == "__main__":
             pulseExcelFiles = []
             inputFolder = './Input Data/Pulse Data/20220112 CPT/'
             for file in os.listdir(inputFolder):
-                if file.endswith(("xlsx", "xls")):
+                if file.endswith(("xlsx", "xls")) and not file.startswith(("$", '~')):
                     pulseExcelFiles.append(inputFolder + file)
             pulseExcelFiles = natsorted(pulseExcelFiles)
         else:
@@ -86,6 +88,26 @@ if __name__ == "__main__":
         if saveInputData:
             saveDataFolder = "./Output Data/Pulse Data/20220112 CPT/"      # Data Folder to Save the Data; MUST END IN '/'
             sheetName = "Blood Pulse Data"                   # If SheetName Already Exists, Excel Will Add 1 to the end (The Copy Number) 
+    # ---------------------------------------------------------------------- #
+    # ---------------------------------------------------------------------- #
+    if analyzeChemical:
+        multipleFiles = True
+        # Specify the Location of the Input Data
+        if multipleFiles:
+            chemicalFiles = []
+            inputFolder = './Input Data/Chemical Data/'
+            for file in os.listdir(inputFolder):
+                if file.endswith(("xlsx", "xls")) and not file.startswith(("$", '~')):
+                    chemicalFiles.append(inputFolder + file)
+            chemicalFiles = natsorted(chemicalFiles)
+        else:
+            chemicalFiles = ["./Input Data/Chemical Data/20210915 cold enzymatic_jiahong - aligned.xlsx"] # Path to the Excel Data ('.xls' or '.xlsx')
+        
+        # Save Data
+        saveChemicalData = False
+        if saveChemicalData:
+            saveDataFolderChemical = "./Output Data/GSR Data/20210510/"  # Data Folder to Save the Data; MUST END IN '/'
+    
     # ---------------------------------------------------------------------- #
     # ---------------------------------------------------------------------- #
     # GSR Parameters
@@ -196,6 +218,25 @@ if __name__ == "__main__":
             # excelDataPulse.saveFilteredData(savingDict, savingPulseInd, saveDataFolder + "Analyzed Data/", saveExcelName, "Filtered Data")
 
     # ---------------------------------------------------------------------- #
+    #                       Analyze Chemical Data                            #
+    # ---------------------------------------------------------------------- #
+    
+    if analyzeChemical:
+        # Create all the Analysis Instances
+        chemicalProcessing = chemicalAnalysis.signalProcessing(startStimulus = 1000, stimulusDuration = 3*60, plotData = True)
+        excelDataChemical = excelProcessing.processChemicalData()
+        
+        for chemicalFile in chemicalFiles:
+            # Read in the Chemical Data from Excel
+            timePoints, chemicalData = excelDataChemical.getData(chemicalFile, testSheetNum = 0)
+            glucose, lactate, uricAcid = chemicalData # Extract the Specific Chemicals
+                            
+            # Process the Data
+            chemicalProcessing.analyzeGlucose(timePoints, glucose, stimulusBuffer = 6*60)
+            chemicalProcessing.analyzeLactate(timePoints, lactate)
+            chemicalProcessing.analyzeUricAcid(timePoints, uricAcid)
+        
+    # ---------------------------------------------------------------------- #
     #                         Analyze GSR Data                               #
     # ---------------------------------------------------------------------- #
     
@@ -209,6 +250,7 @@ if __name__ == "__main__":
         plot = gsrAnalysis.plot()
         plot.plotData(timeGSR, currentGSR, title = "Input GSR Data")
         
+        # Process the Data
         gsrProcessing = gsrAnalysis.signalProcessing()
         timeGSR, currentGSR = gsrProcessing.downsizeDataTime(timeGSR, currentGSR, downsizeWindow = windowGSR)
         plot.plotData(timeGSR, currentGSR, title = "Downsized GSR Data")

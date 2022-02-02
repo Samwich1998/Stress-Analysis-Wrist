@@ -395,6 +395,79 @@ class processGSRData(dataProcessing):
         WB.close()
 
 
+class processChemicalData(dataProcessing):
+    
+    def extractChemicalData(self, ExcelSheet, startDataCol = 1, endDataCol = 4):
+        # If Header Exists, Skip Until You Find the Data
+        for row in ExcelSheet.rows:
+            cellA = row[endDataCol - 1]
+            if type(cellA.value) in [int, float]:
+                dataStartRow = cellA.row + 1
+                break
+        
+        # Loop Through the Excel Worksheet to collect all the data
+        timePoints = []; glucose = []; lactate = []; uricAcid = []
+        for dataRow in ExcelSheet.iter_rows(min_col=startDataCol, min_row=dataStartRow-1, max_col=endDataCol, max_row=ExcelSheet.max_row):
+            # Stop Collecting Data When there is No More
+            if dataRow[0].value == None:
+                break
+            
+            # Get Cell Values
+            timePoints.append(dataRow[0].value)
+            glucose.append(dataRow[1].value)
+            lactate.append(dataRow[2].value)
+            uricAcid.append(dataRow[3].value)
+        
+        return timePoints, [np.array(glucose), np.array(lactate), np.array(uricAcid)]
+            
+    def getData(self, chemicalFile, testSheetNum = 0):
+        """
+        Extracts Pulse Data from Excel Document (.xlsx). Data can be in any
+        worksheet which the user can specify using 'testSheetNum' (0-indexed).
+        In the Worksheet:
+            Time Data must be in Column 'A' (x-Axis)
+            Capacitance Data must be in Column 'B' (y-Axis)
+        If No Data is present in one cell of a row, it will be read in as zero.
+        --------------------------------------------------------------------------
+        Input Variable Definitions:
+            chemicalFile: The Path to the Excel/TXT/CSV File Containing the Chemical Data
+            testSheetNum: An Integer Representing the Excel Worksheet (0-indexed) Order.
+        --------------------------------------------------------------------------
+        """
+        # Check if File Exists
+        if not os.path.exists(chemicalFile):
+            print("The following Input File Does Not Exist:", chemicalFile)
+            sys.exit()
+            
+        # Convert to TXT and CSV Files to XLSX
+        if chemicalFile.endswith(".txt") or chemicalFile.endswith(".csv"):
+            # Extract Filename Information
+            oldFileExtension = os.path.basename(chemicalFile)
+            filename = os.path.splitext(oldFileExtension)[0]
+            newFilePath = os.path.dirname(chemicalFile) + "/Excel Files/"
+            # Make Output Folder Directory if Not Already Created
+            os.makedirs(newFilePath, exist_ok = True)
+
+            # Convert CSV or TXT to XLSX
+            excelFile = newFilePath + filename + ".xlsx"
+            xlWorkbook, chemicalWorksheet = self.convertToExcel(chemicalFile, excelFile, excelDelimiter = ",", overwriteXL = False, testSheetNum = testSheetNum)
+        # If the File is Already an Excel File, Just Load the File
+        elif chemicalFile.endswith(".xlsx"):
+            # Load the GSR Data from the Excel File
+            xlWorkbook = xl.load_workbook(chemicalFile, data_only=True, read_only=True)
+            chemicalWorksheet = xlWorkbook.worksheets[testSheetNum]
+        else:
+            print("The Following File is Neither CSV, TXT, Nor XLSX:", chemicalFile)
+        print("Extracting Data from the Excel File:", chemicalFile)
+        
+        # Extract Time and Current Data from the File
+        timePoints, chemicalData = self.extractChemicalData(chemicalWorksheet)
+        
+        xlWorkbook.close()
+        # Finished Data Collection: Close Workbook and Return Data to User
+        print("Done Collecting GSR Data");
+        return np.array(timePoints), np.array(chemicalData)
+
 class processMLData(dataProcessing):
     
     def getData(self, MLFile, signalData = [], signalLabels = [], testSheetNum = 0, startCollectionCol = 2):
