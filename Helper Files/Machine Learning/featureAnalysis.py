@@ -112,6 +112,80 @@ class featureAnalysis:
         # Plot the New Correlations
         sns.set_theme(); ax = sns.heatmap(matrix, cmap='icefire', xticklabels=signalLabelsX, yticklabels=signalLabelsY)
                     
+    
+    def featureComparison(self, featureList1, featureList2, featureLabels, featureNames, xChemical, yChemical):
+        # Create Directory to Save the Figures
+        saveDataFolder = self.saveDataFolder + "chemicalFeatureComparison/"
+        os.makedirs(saveDataFolder, exist_ok=True)
+        
+        featureList1 = np.array(featureList1)
+        featureList2 = np.array(featureList2)
+        
+        colorList = ['ko', 'ro', 'bo']
+        labelList = ['Cold', 'Exercise', 'VR']
+
+        for featureInd1 in range(len(featureNames)):
+            
+            features1 = featureList1[:, featureInd1]
+            
+            for featureInd2 in range(len(featureNames)):
+                features2 = featureList2[:, featureInd2]
+                
+                fig = plt.figure()
+                for ind in range(len(featureLabels)):
+                    labelInd = featureLabels[ind]
+                    plt.plot(features1[ind], features2[ind], colorList[labelInd], label=labelList[labelInd])
+                
+                plt.xlabel(xChemical + ": " + featureNames[featureInd1])
+                plt.ylabel(yChemical + ": " + featureNames[featureInd2])
+                plt.title("Feature Comparison")
+                plt.legend()
+                # Save the Figure
+                fig.savefig(saveDataFolder + featureNames[featureInd1] + "_" + featureNames[featureInd2] + ".png", dpi=300, bbox_inches='tight')
+            
+                plt.show()
+    
+    def singleFeatureComparison(self, featureListFull, featureLabelFull, chemicalOrder, featureNames):
+        # Create Directory to Save the Figures
+        saveDataFolder = self.saveDataFolder + "singleChemicalFeatureComparison/"
+        os.makedirs(saveDataFolder, exist_ok=True)
+        
+        colorList = ['ko', 'ro', 'bo']
+        #labelList = ['Cold', 'Exercise', 'VR']
+        for chemicalInd in range(len(chemicalOrder)):
+            chemicalName = chemicalOrder[chemicalInd]
+            featureList = featureListFull[chemicalInd]
+            featureLabels = featureLabelFull[chemicalInd]
+            
+            saveDataFolderChemical = saveDataFolder + chemicalName + "/"
+            os.makedirs(saveDataFolderChemical, exist_ok=True)
+            
+            for featureInd in range(len(featureNames)):
+                
+                features = featureList[:, featureInd]
+                
+                fig = plt.figure()
+                for ind in range(len(featureLabels)):
+                    labelInd = featureLabels[ind]
+                    plt.plot(features[ind], [0], colorList[labelInd])
+                
+                plt.xlabel(chemicalName + ": " + featureNames[featureInd])
+                plt.ylabel("Constant")
+                plt.title("Feature Comparison")
+               # plt.legend()
+                # Save the Figure
+                fig.savefig(saveDataFolderChemical + featureNames[featureInd] + ".png", dpi=300, bbox_inches='tight')
+            
+                plt.show()
+
+            
+            
+            
+            
+            
+            
+            
+            
             
             
             

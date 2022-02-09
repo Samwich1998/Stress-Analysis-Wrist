@@ -51,7 +51,9 @@ if __name__ == "__main__":
     # ---------------------------------------------------------------------- #
     #    User Parameters to Edit (More Complex Edits are Inside the Files)   #
     # ---------------------------------------------------------------------- #
-
+    #sys.exit()
+    
+    
     # Specify Which Program to Run; All Can be Run in One Scirpt (NOT Simutaneously Yet)
     analyzePulse = False
     analyzeChemical = True
@@ -101,12 +103,13 @@ if __name__ == "__main__":
                     chemicalFiles.append(inputFolder + file)
             chemicalFiles = natsorted(chemicalFiles)
         else:
-            chemicalFiles = ["./Input Data/Chemical Data/20210915 cold enzymatic_jiahong - aligned.xlsx"] # Path to the Excel Data ('.xls' or '.xlsx')
+            chemicalFiles = ["./Input Data/Chemical Data/20211022 cold enzymatic_jose - aligned.xlsx"] # Path to the Excel Data ('.xls' or '.xlsx')
         
         # Save Data
-        saveChemicalData = False
+        saveChemicalData = True
+        analyzeFeatures = True
         if saveChemicalData:
-            saveDataFolderChemical = "./Output Data/GSR Data/20210510/"  # Data Folder to Save the Data; MUST END IN '/'
+            saveDataFolderChemical = "./Output Data/Chemical Data/Initial List/"  # Data Folder to Save the Data; MUST END IN '/'
     
     # ---------------------------------------------------------------------- #
     # ---------------------------------------------------------------------- #
@@ -201,7 +204,7 @@ if __name__ == "__main__":
         pulseFeatures.extend(['momentumDensity', 'pseudoCardiacOutput', 'pseudoStrokeVolume'])
         pulseFeatures.extend(['maxSystolicVelocity', 'valveCrossSectionalArea', 'velocityTimeIntegral', 'velocityTimeIntegralABS', 'velocityTimeIntegral_ALT'])
         pulseFeatures.extend(['centralAugmentationIndex', 'centralAugmentationIndex_EST', 'reflectionIndex', 'stiffensIndex'])
-        # sys.exit()
+        sys.exit()
              
         if analyzeFeatures:
             dataProcessing.featureList = np.array(dataProcessing.featureList)
@@ -223,18 +226,76 @@ if __name__ == "__main__":
     
     if analyzeChemical:
         # Create all the Analysis Instances
-        chemicalProcessing = chemicalAnalysis.signalProcessing(startStimulus = 1000, stimulusDuration = 3*60, plotData = True)
+        chemicalProcessing = chemicalAnalysis.signalProcessing(startStimulus = 1000, stimulusDuration = 3*60, stimulusBuffer = 6*60, plotData = True)
         excelDataChemical = excelProcessing.processChemicalData()
         
+        featureLabels = []
         for chemicalFile in chemicalFiles:
             # Read in the Chemical Data from Excel
             timePoints, chemicalData = excelDataChemical.getData(chemicalFile, testSheetNum = 0)
             glucose, lactate, uricAcid = chemicalData # Extract the Specific Chemicals
+            
+            fileName = Path(chemicalFile).stem
+            featureLabel = fileName.split(" ")[1]
+            if 'cold' == featureLabel.lower():
+                featureLabel = 0
+            elif 'exercise' == featureLabel.lower():
+                featureLabel = 1
+            elif 'vr' == featureLabel.lower():
+                featureLabel = 2
+            else:
+                print("UNSURE OF THE LABEL. STOP CHANGING THE FORMAT ON ME"); sys.exit()
                             
             # Process the Data
-            chemicalProcessing.analyzeGlucose(timePoints, glucose, stimulusBuffer = 6*60)
-            chemicalProcessing.analyzeLactate(timePoints, lactate)
-            chemicalProcessing.analyzeUricAcid(timePoints, uricAcid)
+            chemicalProcessing.analyzeChemicals(timePoints, glucose, lactate, uricAcid, featureLabel)
+            
+            # if chemicalProcessing.continueAnalysis:
+            #     fileName = Path(chemicalFile).stem
+            #     featureLabel = fileName.split(" ")[1]
+                
+            #     if 'cold' == featureLabel.lower():
+            #         featureLabels.append(0)
+            #     elif 'exercise' == featureLabel.lower():
+            #         featureLabels.append(1)
+            #     elif 'vr' == featureLabel.lower():
+            #         featureLabels.append(2)
+            #     else:
+            #         print("UNSURE OF THE LABEL. STOP CHANGING THE FORMAT ON ME"); sys.exit()
+        
+        glucoseFeatures = np.array(chemicalProcessing.glucoseFeatures)
+        lactateFeatures = np.array(chemicalProcessing.lactateFeatures)
+        uricAcidFeatures = np.array(chemicalProcessing.uricAcidFeatures)
+        
+        featureLabelsGlucose = np.array(chemicalProcessing.featureLabelsGlucose)
+        featureLabelsLactate = np.array(chemicalProcessing.featureLabelsLactate)
+        featureLabelsUricAcid = np.array(chemicalProcessing.featureLabelsUricAcid)
+        
+        featureNames = []
+        # Saving Features from Section: Time Features
+        featureNames.extend(['peakDuration', 'peakRiseDuration', 'peakFallDuration'])
+        featureNames.extend(['velInterval', 'velRiseToPeak', 'velFallToPeak', 'peakDurationRatio'])
+        featureNames.extend(['accelInterval1', 'accelInterval2', 'accelInterval3', 'accelInterval4', 'accelInterval5'])
+        featureNames.extend(['thirdDerivInterval', 'thirdDerivAccelInterval1', 'accelToVelLeft', 'accelToVelRight'])
+        # Saving Features from Section: Slope Features
+        featureNames.extend(['upSlope', 'downSlope', 'velSlope', 'accelEndStimulusSlope', 'thirdDerivEndStimulusSlope'])
+        # Saving Features from Section: Amplitude Features
+        featureNames.extend(['peakAmp', 'velAmp', 'accelAmp'])
+        featureNames.extend(['maxUpSlopeConc', 'maxDownSlopeConc', 'maxUpSlopeVel', 'maxDownSlopeVel', 'maxUpSlopeAccel', 'maxDownSlopeAccel'])
+        featureNames.extend(['maxAccelLeftConc', 'maxAccelRightConc', 'minAccelRightConc', 'maxAccelLeftVel', 'maxAccelRightVel', 'minAccelRightVel', 'maxAccelLeftAccel', 'maxAccelRightAccel', 'minAccelRightAccel'])
+        featureNames.extend(['thirdDerivRightMaxConc', 'thirdDerivRightMinConc', 'thirdDerivRightMaxVel', 'thirdDerivRightMinVel', 'thirdDerivRightVel', 'thirdDerivRightVel'])
+        featureNames.extend(['velDiffConc', 'velDiffVel', 'velDiffAccel'])
+        featureNames.extend(['peakTentX', 'peakTentY', 'tentDeviationX', 'tentDeviationY'])
+        # Saving Features from Section: Under the Curve Features
+        featureNames.extend(['peakArea', 'leftArea', 'rightArea', 'velToVelArea'])  
+        featureNames.extend(['geometricMean', 'peakAverage'])
+#        sys.exit()
+        
+        if analyzeFeatures:
+            analyzeFeatures = featureAnalysis.featureAnalysis([], [], featureNames, [1110, 1110+60*3], saveDataFolderChemical)
+            analyzeFeatures.singleFeatureComparison([glucoseFeatures, lactateFeatures, uricAcidFeatures], [featureLabelsGlucose,featureLabelsLactate,featureLabelsUricAcid], ["Glucose", "Lactate", "UricAcid"], featureNames)
+            #analyzeFeatures.featureComparison(glucoseFeatures, uricAcidFeatures, featureLabels, featureNames, 'Glucose', 'Uric Acid')
+        
+        sys.exit()
         
     # ---------------------------------------------------------------------- #
     #                         Analyze GSR Data                               #
