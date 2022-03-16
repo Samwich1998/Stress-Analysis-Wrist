@@ -41,13 +41,13 @@ import createHeatMap as createMap       # Functions for Neural Network
 
 class predictionModelHead:
     
-    def __init__(self, modelType, modelPath, numFeatures, gestureClasses, saveDataFolder):
+    def __init__(self, modelType, modelPath, numFeatures, machineLearningClasses, saveDataFolder):
         # Store Parameters
         self.modelType = modelType
         self.modelPath = modelPath
         self.saveDataFolder = saveDataFolder
-        self.gestureClasses = gestureClasses
-        self.numClasses = len(gestureClasses)
+        self.machineLearningClasses = machineLearningClasses
+        self.numClasses = len(machineLearningClasses)
         
         # Holder Variables
         self.map2D = []
@@ -83,15 +83,17 @@ class predictionModelHead:
         return predictionModel
     
     def trainModel(self, signalData, signalLabels, featureLabels = []):
-        if featureLabels and not len(featureLabels) == len(signalData[0]):
+        if len(featureLabels) != 0 and not len(featureLabels) == len(signalData[0]):
             print("The Number of Feature Labels Provided Does Not Match the Number of Features")
             print("Removing Feature Labels")
             featureLabels = []
         print(len(featureLabels))
             
         signalData = np.array(signalData); signalLabels = np.array(signalLabels)
-        # Split the Data into Training and Validation Sets
-        Training_Data, Testing_Data, Training_Labels, Testing_Labels = train_test_split(signalData, signalLabels, test_size=0.33, shuffle= True, stratify=signalLabels)
+        # Find the Data Distribution
+        classDistribution = collections.Counter(signalLabels)
+        print("Class Distribution:", classDistribution)
+        print("Number of Data Points = ", len(classDistribution))
         
         if self.modelType in ['RF', 'LR', 'KNN', 'SVM', 'NN']:
             # Train the Model Multiple Times
@@ -99,9 +101,9 @@ class predictionModelHead:
             for _ in range(1):
                 modelScore = []
                 # Taking the Average Score Each Time
-                for _ in range(1):
+                for _ in range(500):
                     # Train the Model with the Training Data
-                    Training_Data, Testing_Data, Training_Labels, Testing_Labels = train_test_split(signalData, signalLabels, test_size=0.33, shuffle= True, stratify=signalLabels)
+                    Training_Data, Testing_Data, Training_Labels, Testing_Labels = train_test_split(signalData, signalLabels, test_size=0.3, shuffle= True, stratify=signalLabels)
                     modelScore.append(self.predictionModel.trainModel(Training_Data, Training_Labels, Testing_Data, Testing_Labels))
                 # Display the Spread of Scores
                 plt.hist(modelScore, 100, facecolor='blue', alpha=0.5)
@@ -112,19 +114,14 @@ class predictionModelHead:
             meanScore = np.median(means, axis=0)
             print("Mean Testing Accuracy:", meanScore)
             # Label Accuracy
-            self.accuracyDistributionPlot(signalData, signalLabels,  self.predictionModel.predictData(signalData), self.gestureClasses)
+            self.accuracyDistributionPlot_Average(signalData, signalLabels, self.machineLearningClasses, "Test")
+            self.accuracyDistributionPlot_Average(signalData, signalLabels, self.machineLearningClasses, "Full")
             # Extract Feature Importance
             self.featureImportance(signalData, signalLabels, signalData, signalLabels, featureLabels = featureLabels, numTrials = 100)
 
         if self.modelType == "NN":
             # Plot the training loss    
             self.predictionModel.plotStats()
-            
-
-        # Find the Data Distribution
-        classDistribution = collections.Counter(signalLabels)
-        print("Class Distribution:", classDistribution)
-        print("Number of Data Points = ", len(classDistribution))
         
         
     def mapTo2DPlot(self, signalData, signalLabels, name = "Channel Map"):
@@ -231,38 +228,59 @@ class predictionModelHead:
                     cb.remove()
                 
         plt.show() # Must be the Last Line
-    
-    def accuracyDistributionPlot(self, signalData, signalLabelsTrue, signalLabelsML, movementOptions, name = "Accuracy Distribution"):
+                 
+    def accuracyDistributionPlot_Average(self, signalData, signalLabels, machineLearningClasses, analyzeType = "Full", name = "Accuracy Distribution"):
+        numAverage = 500
         
-        # Calculate the Accuracy Matrix
-        accMat = np.zeros((len(movementOptions), len(movementOptions)))
-        for ind, channelFeatures in enumerate(signalData):
-            # Sum(Row) = # of Gestures Made with that Label
-            # Each Column in a Row = The Number of Times that Gesture Was Predicted as Column Label #
-            accMat[signalLabelsTrue[ind]][signalLabelsML[ind]] += 1
+        accMat = np.zeros((len(machineLearningClasses), len(machineLearningClasses)))
+        # Taking the Average Score Each Time
+        for roundInd in range(1,numAverage+1):
+            # Train the Model with the Training Data
+            Training_Data, Testing_Data, Training_Labels, Testing_Labels = train_test_split(signalData, signalLabels, test_size=0.3, shuffle= True, stratify=signalLabels)
+            self.predictionModel.trainModel(Training_Data, Training_Labels, Testing_Data, Testing_Labels)
+            
+            if analyzeType == "Full":
+                inputData = signalData; inputLabels = signalLabels
+            elif analyzeType == "Test":
+                inputData = Testing_Data; inputLabels = Testing_Labels
+            else:
+                sys.exit("Unsure which data to use for the accuracy map");
+
+            testingLabelsML = self.predictionModel.predictData(inputData)
+            # Calculate the Accuracy Matrix
+            accMat_Temp = np.zeros((len(machineLearningClasses), len(machineLearningClasses)))
+            for ind, channelFeatures in enumerate(inputData):
+                # Sum(Row) = # of Gestures Made with that Label
+                # Each Column in a Row = The Number of Times that Gesture Was Predicted as Column Label #
+                accMat_Temp[inputLabels[ind]][testingLabelsML[ind]] += 1
         
-        # Scale Each Row to 100
-        for label in range(len(movementOptions)):
-            accMat[label] = 100*accMat[label]/np.sum(accMat[label])
+            # Scale Each Row to 100
+            for label in range(len(machineLearningClasses)):
+                accMat_Temp[label] = 100*accMat_Temp[label]/(np.sum(accMat_Temp[label]))
+            
+                # Scale Each Row to 100
+            for label in range(len(machineLearningClasses)):
+                accMat[label] = (accMat[label]*(roundInd-1) + accMat_Temp[label])/roundInd
+
         
         # Make plot
         fig, ax = plt.subplots()
-        fig.set_size_inches(8,8)
+        fig.set_size_inches(6,6)
         
         # Make heatmap on plot
-        im, cbar = createMap.heatmap(accMat, movementOptions, movementOptions, ax=ax,
+        im, cbar = createMap.heatmap(accMat, machineLearningClasses, machineLearningClasses, ax=ax,
                            cmap="copper", cbarlabel="Gesture Accuracy (%)")
         createMap.annotate_heatmap(im, accMat, valfmt="{x:.2f}",)
         
         # Style the Fonts
         font = {'family' : 'verdana',
                 'weight' : 'bold',
-                'size'   : 8}
+                'size'   : 10}
         matplotlib.rc('font', **font)
         
         # Format, save, and show
         fig.tight_layout()
-        plt.savefig(self.saveDataFolder + name + " " + self.modelType + ".png", dpi=130, bbox_inches='tight')
+        plt.savefig(self.saveDataFolder + name + " " + analyzeType + " " + self.modelType + ".png", dpi=130, bbox_inches='tight')
         plt.show()
     
     
@@ -277,7 +295,7 @@ class predictionModelHead:
                  xerr=perm_importance_result['importances_std'][indices])
     
         ax.set_yticks(range(len(indices)))
-        if featureLabels:
+        if len(featureLabels) != 0:
             _ = ax.set_yticklabels(np.array(featureLabels)[indices])
       #      headers = np.array(featureLabels)[indices]
       #      for i in headers:
@@ -299,7 +317,7 @@ class predictionModelHead:
             importance = self.predictionModel.model.feature_importances_
             # summarize feature importance
             for i,v in enumerate(importance):
-                if featureLabels:
+                if len(featureLabels) != 0:
                     i = featureLabels[i]
                     print('%s Weight: %.5g' % (str(i),v))
             # Plot feature importance
@@ -313,7 +331,7 @@ class predictionModelHead:
             ax.set_ylabel("Feature Importance")
             
             # Set X-Labels
-            if featureLabels:
+            if len(featureLabels) != 0:
                 ax.set_xticklabels(featureLabels)
                 self.add_value_labels(ax)
             # Show Plot
@@ -322,11 +340,13 @@ class predictionModelHead:
             pyplot.show()
              
         
-        if featureLabels:
+        if len(featureLabels) != 0:
+            featureLabels = np.array(featureLabels)
+            print("Entering SHAP Analysis")
             # Make Output Folder for SHAP Values
             os.makedirs(self.saveDataFolder + "SHAP Values/", exist_ok=True)
             # Create Panda DataFrame to Match Input Type for SHAP
-            testingDataPD = pd.DataFrame(Testing_Data, columns = featureLabels)
+            testingDataPD = pd.DataFrame(signalData, columns = featureLabels)
             
             # More General Explainer
             explainerGeneral = shap.Explainer(self.predictionModel.model.predict, testingDataPD)
@@ -337,25 +357,26 @@ class predictionModelHead:
                 explainer = shap.TreeExplainer(self.predictionModel.model)
                 shap_values = explainer.shap_values(testingDataPD)
                 
-                misclassified = Testing_Labels != self.predictionModel.model.predict(Testing_Data)
-                shap.decision_plot(explainer.expected_value, shap_valuesGeneral, features = testingDataPD, feature_names = featureLabels, feature_order = "importance", highlight = misclassified)
+                # misclassified = Testing_Labels != self.predictionModel.model.predict(signalData)
+                # shap.multioutput_decision_plot(list(explainer.expected_value), list(shap_values), row_index = 0, features = testingDataPD, feature_names = list(featureLabels), feature_order = "importance", highlight = misclassified)
+                # #shap.decision_plot(explainer.expected_value, shap_values, features = testingDataPD, feature_names = list(featureLabels), feature_order = "importance", highlight = misclassified)
 
             else:
                 # Calculate Shap Values
                 explainer = shap.KernelExplainer(self.predictionModel.model.predict, testingDataPD)
-                shap_values = explainer.shap_values(testingDataPD, nsamples=len(Testing_Data))
+                shap_values = explainer.shap_values(testingDataPD, nsamples=len(signalData))
             
             # Specify Indivisual Sharp Parameters
             dataPoint = 10
             featurePoint = 20
-
+            
             # Summary Plot
             name = "Summary Plot"
             summaryPlot = plt.figure()
             if self.modelType == "RF":
-                shap.summary_plot(shap_values, testingDataPD, plot_type="bar", class_names=self.gestureClasses, feature_names = featureLabels)
+                shap.summary_plot(shap_values, testingDataPD, plot_type="bar", class_names=self.machineLearningClasses, feature_names = featureLabels, max_display = len(featureLabels))
             else:
-                shap.summary_plot(shap_valuesGeneral, testingDataPD, class_names=self.gestureClasses, feature_names = featureLabels)
+                shap.summary_plot(shap_valuesGeneral, testingDataPD, class_names=self.machineLearningClasses, feature_names = featureLabels)
             summaryPlot.savefig(self.saveDataFolder + "SHAP Values/" + name + " " + self.modelType + ".png", bbox_inches='tight', dpi=300)
             
             # Dependance Plot
@@ -382,7 +403,7 @@ class predictionModelHead:
             waterfallPlot.savefig(self.saveDataFolder + "SHAP Values/" + name + " " + self.modelType + ".png", bbox_inches='tight', dpi=300)
  
             # Indivisual Decision Plot
-            misclassified = Testing_Labels != self.predictionModel.model.predict(Testing_Data)
+            misclassified = Testing_Labels != self.predictionModel.model.predict(signalData)
             decisionFolder = self.saveDataFolder + "SHAP Values/Decision Plots/"
             os.makedirs(decisionFolder, exist_ok=True) 
             for dataPoint1 in range(min(50, len(testingDataPD))):
@@ -420,7 +441,7 @@ class predictionModelHead:
                     scatterPlot.savefig(scatterFolder + name + " " + self.modelType + ".png", bbox_inches='tight', dpi=300)
             
             # Monitoring Plot (The Function is a Beta Test As of 11-2021)
-            if len(Testing_Data) > 150:  # They Skip Every 50 Points I Believe
+            if len(signalData) > 150:  # They Skip Every 50 Points I Believe
                 name = "Monitor Plot"
                 monitorPlot = plt.figure()
                 shap.monitoring_plot(featurePoint, shap_values, features = testingDataPD, feature_names = featureLabels)

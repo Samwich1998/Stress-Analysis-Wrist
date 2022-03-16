@@ -400,7 +400,7 @@ class processChemicalData(dataProcessing):
     def extractChemicalData(self, ExcelSheet, startDataCol = 1, endDataCol = 4):
         # If Header Exists, Skip Until You Find the Data
         for row in ExcelSheet.rows:
-            cellA = row[endDataCol - 1]
+            cellA = row[0]
             if type(cellA.value) in [int, float]:
                 dataStartRow = cellA.row + 1
                 break
@@ -412,11 +412,19 @@ class processChemicalData(dataProcessing):
             if dataRow[0].value == None:
                 break
             
+            # Get Data
+            glucoseData = dataRow[1].value
+            lactateData = dataRow[2].value
+            uricAcidData = dataRow[3].value
+
             # Get Cell Values
             timePoints.append(dataRow[0].value)
-            glucose.append(dataRow[1].value)
-            lactate.append(dataRow[2].value)
-            uricAcid.append(dataRow[3].value)
+            if glucoseData != None:
+                glucose.append(float(glucoseData))
+            if lactateData != None:
+                lactate.append(float(lactateData))
+            if uricAcidData != None:
+                uricAcid.append(float(uricAcidData))
         
         return timePoints, [np.array(glucose), np.array(lactate), np.array(uricAcid)]
             

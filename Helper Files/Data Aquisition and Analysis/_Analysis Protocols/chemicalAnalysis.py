@@ -1,19 +1,20 @@
 
 # Basic Modules
-import sys
+import math
 import numpy as np
-# Peak Detection
+# Peak Detection Modules
 import scipy
 import scipy.signal
-# High/Low Pass Filters
+# Data Filtering Modules
 from scipy.signal import butter
-# Matlab Plotting API
-import matplotlib as mpl
+from scipy.signal import savgol_filter
+# Matlab Plotting Modules
 import matplotlib.pyplot as plt
-
-from scipy.stats.mstats import gmean
-from scipy.signal import butter, lfilter 
-from scipy.interpolate import UnivariateSpline
+# Feature Extraction Modules
+from scipy.stats import skew
+from scipy.stats import entropy
+from scipy.stats import kurtosis
+from scipy.fft import fft, ifft
         
 # --------------------------------------------------------------------------- #
 # --------------------------------------------------------------------------- #
@@ -29,12 +30,18 @@ class signalProcessing:
         self.featureLabelsLactate = []
         self.featureLabelsUricAcid = []
         
-        self.lowPassCutoff = 0.007
+        self.lowPassCutoff = 0.01
+        
+        self.minPeakDuration = 20
+        
+        self.minLeftBoundaryInd = 100
         
         self.plotData = plotData
         
         self.startStimulus = startStimulus
         self.stimulusDuration = stimulusDuration + stimulusBuffer
+        
+        self.peakData = {"Lactate":[], "Glucose":[], "Uric Acid":[]}
     
     def analyzeData(self, xData, yData, chemicalName = ""):
         if not self.continueAnalysis:
@@ -43,7 +50,7 @@ class signalProcessing:
         # ------------------------- Filter the Data ------------------------- #
         # Apply a Low Pass Filter
         self.samplingFreq = len(xData)/(xData[-1] - xData[0])
-        yData = self.butterFilter(yData, self.lowPassCutoff, self.samplingFreq, order = 3, filterType = 'low')
+        yData = self.butterFilter(yData, self.lowPassCutoff, self.samplingFreq, order = 4, filterType = 'low')
         # ------------------------------------------------------------------- #
         
         # ------------------- Find and Remove the Baseline ------------------ #
@@ -52,81 +59,111 @@ class signalProcessing:
         # Return None if No Peak Found
         if chemicalPeakInd == None:
             print("No Peak Found in " + chemicalName + " Data")
-            return [0]*57 if len(self.glucoseFeatures) == 0 else [0]*len(self.glucoseFeatures[0])
+            self.plot(xData, yData, [], [], 0, 0, 0, chemicalName + " NO PEAK FOUND")
+            self.continueAnalysis = False
+            #sys.exit()
+            return [] #[0]*74 if len(self.glucoseFeatures) == 0 else [0]*len(self.glucoseFeatures[0])
         # ------------------------------------------------------------------- #
-        self.plot(xData, yData, yData, yData, chemicalPeakInd, chemicalPeakInd, chemicalPeakInd, chemicalName)
+
         # ------------------- Find and Remove the Baseline ------------------ #
         # Get Baseline from Best Linear Fit
         leftCutInd, rightCutInd = self.findLinearBaseline(xData, yData, chemicalPeakInd)
-        if None in [leftCutInd, rightCutInd] or abs(leftCutInd - rightCutInd) < 10:
+        if None in [leftCutInd, rightCutInd] or abs(leftCutInd - rightCutInd) < self.minPeakDuration or self.minLeftBoundaryInd + 1 >= leftCutInd:
             print("No Baseline Found in " + chemicalName + " Data")
+            self.plot(xData, yData, [], [], chemicalPeakInd, 0, 0, chemicalName + " NO BASELINE FOUND")
             self.continueAnalysis = False
             return []
         
         # Fit Lines to Ends of Graph
         lineSlope, slopeIntercept = np.polyfit(xData[[leftCutInd, rightCutInd]], yData[[leftCutInd, rightCutInd]], 1)
         linearFit = lineSlope*xData + slopeIntercept
+        
+        # Apply a Smoothing Function
+        yData = savgol_filter(yData, max(3, self.convertToOddInt((rightCutInd-leftCutInd)/9)), 2)  # 61/3,2
             
         # Piece Together yData's Baseline
-        baseline = np.concatenate((yData[0:leftCutInd+1], linearFit[leftCutInd+1: rightCutInd], yData[rightCutInd:len(yData)]))
+        baseline = np.concatenate((yData[0:leftCutInd], linearFit[leftCutInd: rightCutInd+1], yData[rightCutInd+1:len(yData)]))
         # Find yData After Baseline Subtraction
         baselineData = yData - baseline
         # ------------------------------------------------------------------- #
         
         # -------------------- Extract Features from Peak ------------------- #
         # Adjust the Peak's Ind After Baseline Subtraction
-        chemicalPeakInd = self.findNearbyMaximum(baselineData, chemicalPeakInd, binarySearchWindow = 2)
-        chemicalPeakInd = self.findNearbyMaximum(baselineData, chemicalPeakInd, binarySearchWindow = -2)
+        chemicalPeakInd = self.findNearbyMaximum(baselineData, chemicalPeakInd, binarySearchWindow = 4)
+        chemicalPeakInd = self.findNearbyMaximum(baselineData, chemicalPeakInd, binarySearchWindow = -4)
         
-        # Establish New Peak Boundaries
-        leftBaseInd = self.findNearbyMinimum(baselineData, chemicalPeakInd, binarySearchWindow = -1)
-        rightBaseInd = self.findNearbyMinimum(baselineData, chemicalPeakInd, binarySearchWindow = 1)
-
+        # Establish New Peak Boundaries; But Dont Take Past the CutOffs (as it is Zero)
+        leftBaseInd = max(leftCutInd, self.findNearbyMinimum(baselineData, chemicalPeakInd, binarySearchWindow = -2))
+        rightBaseInd = min(rightCutInd, self.findNearbyMinimum(baselineData, chemicalPeakInd, binarySearchWindow = 2))
+        
+        if rightBaseInd - leftBaseInd  < 250:
+            print("Peak too small duration in " + chemicalName + " Data")
+            self.continueAnalysis = False
+            return []
         # Extract the Features from the Data
         peakFeatures = self.extractFeatures(xData[leftBaseInd:rightBaseInd+1] - xData[leftBaseInd], baselineData[leftBaseInd:rightBaseInd+1], chemicalPeakInd-leftBaseInd, chemicalName)
+        #peakFeatures = self.extractFeatures_Pointwise(xData[leftBaseInd:rightBaseInd+1] - xData[leftBaseInd], baselineData[leftBaseInd:rightBaseInd+1], chemicalPeakInd-leftBaseInd, chemicalName)
         # ------------------------------------------------------------------- #
         
         # -------------------------- Plot the Data -------------------------- #
-       # if self.plotData:
-       #     self.plot(xData, yData, baselineData, linearFit, chemicalPeakInd, leftCutInd, rightCutInd, chemicalName)
+        if self.plotData:
+            self.plot(xData, yData, baselineData, linearFit, chemicalPeakInd, leftCutInd, rightCutInd, chemicalName)
         # ------------------------------------------------------------------- #
         
         if len(peakFeatures) == 0:
             print("No Features Found in " + chemicalName + " Data")
             self.continueAnalysis = False
+        else:  
+            self.peakData[chemicalName].append((xData[leftBaseInd:rightBaseInd+1] - xData[leftBaseInd], baselineData[leftBaseInd:rightBaseInd+1]))
         return peakFeatures
     
-    def analyzeChemicals(self, timePoints, glucose, lactate, uricAcid, label):
+    def analyzeChemicals(self, timePoints, glucose, lactate, uricAcid, label, analyzeTogether):
         # Assert All Chemical Data is Well-Formed 
         self.continueAnalysis = True
         
         # Analyze Each Chemical
-        glucoseFeatures = self.analyzeData(timePoints, glucose, chemicalName = "Glucose")
-        self.continueAnalysis = True
-        lactateFeatures = self.analyzeData(timePoints, lactate, chemicalName = "Lactate")
-        self.continueAnalysis = True
-        uricAcidFeatures = self.analyzeData(timePoints, uricAcid, chemicalName = "Uric Acid")
-        self.continueAnalysis = True
+        if len(glucose) > 0:
+            glucoseFeatures = self.analyzeData(timePoints, glucose, chemicalName = "Glucose")
+            if not analyzeTogether:
+                self.continueAnalysis = True
+            
+        if self.continueAnalysis and len(lactate) > 0:
+            lactateFeatures = self.analyzeData(timePoints, lactate, chemicalName = "Lactate")
+            if not analyzeTogether:
+                self.continueAnalysis = True
         
+        if self.continueAnalysis and len(uricAcid) > 0:
+            uricAcidFeatures = self.analyzeData(timePoints, uricAcid, chemicalName = "Uric Acid")
+            if not analyzeTogether:
+                self.continueAnalysis = True
+            
         # If Features Found for ALL Chemicals
         if self.continueAnalysis:
             # Keep Track of the Features
-            if len(glucoseFeatures) > 0:
-                self.glucoseFeatures.append(glucoseFeatures)
-                self.featureLabelsGlucose.append(label)
-            if len(lactateFeatures) > 0:
-                self.lactateFeatures.append(lactateFeatures)
-                self.featureLabelsLactate.append(label)
-            if len(uricAcidFeatures) > 0:
-                self.uricAcidFeatures.append(uricAcidFeatures)
-                self.featureLabelsUricAcid.append(label)
+            if len(glucose) > 0 and len(glucoseFeatures) > 0:
+                self.glucoseFeatures.extend(glucoseFeatures)
+                for _ in range(len(glucoseFeatures)):
+                    self.featureLabelsGlucose.append(label)
+                    
+            if len(lactate) > 0 and len(lactateFeatures) > 0:
+                self.lactateFeatures.extend(lactateFeatures)
+                for _ in range(len(lactateFeatures)):
+                    self.featureLabelsLactate.append(label)
+
+            if len(uricAcid) > 0 and len(uricAcidFeatures) > 0:
+                self.uricAcidFeatures.extend(uricAcidFeatures)
+                for _ in range(len(uricAcidFeatures)):
+                    self.featureLabelsUricAcid.append(label)
 
     # ----------------------------------------------------------------------- #
     # ----------------------------------------------------------------------- #
     
-    def findPeak(self, xData, yData, ignoredBoundaryPoints = 10):
+    def convertToOddInt(self, x):
+        return 2*math.floor((x+1)/2) - 1
+    
+    def findPeak(self, xData, yData, ignoredBoundaryPoints = 10, deriv = False):
         # Find All Peaks in the Data
-        peakInfo = scipy.signal.find_peaks(yData, prominence=.0001, width=30, distance = 20)
+        peakInfo = scipy.signal.find_peaks(yData, prominence=10E-10, width=20, distance = 20)
         # Extract the Peak Information
         peakProminences = peakInfo[1]['prominences']
         peakIndices = peakInfo[0]
@@ -146,6 +183,9 @@ class signalProcessing:
             bestPeak = allProminences.argmax()
             peakInd = peakIndices[bestPeak]
             return peakInd
+        elif not deriv:
+            filteredVelocity = savgol_filter(np.gradient(yData), 251, 3)
+            return self.findPeak(xData, filteredVelocity, deriv = True)
         # If No Peak is Found, Return None
         return None
     
@@ -206,7 +246,9 @@ class signalProcessing:
         """
         # Base Case
         if abs(binarySearchWindow) < 1 or maxPointsSearch == 0:
-            return xPointer - 1 + np.argmin(data[max(0,xPointer-1):min(xPointer+2, len(data))]) 
+            searchSegment = data[max(0,xPointer-1):min(xPointer+2, len(data))]
+            xPointer -= np.where(searchSegment==data[xPointer])[0][0]
+            return xPointer + np.argmin(searchSegment) 
         
         maxHeightPointer = xPointer
         maxHeight = data[xPointer]; searchDirection = binarySearchWindow//abs(binarySearchWindow)
@@ -214,7 +256,7 @@ class signalProcessing:
         for dataPointer in range(max(xPointer, 0), max(0, min(xPointer + searchDirection*maxPointsSearch, len(data))), binarySearchWindow):
             # If the Next Point is Greater Than the Previous, Take a Step Back
             if data[dataPointer] >= maxHeight and xPointer != dataPointer:
-                return self.findNearbyMinimum(data, dataPointer - binarySearchWindow, round(binarySearchWindow/8), maxPointsSearch - searchDirection*(abs(dataPointer - binarySearchWindow)) - xPointer)
+                return self.findNearbyMinimum(data, dataPointer - binarySearchWindow, round(binarySearchWindow/4), maxPointsSearch - searchDirection*(abs(dataPointer - binarySearchWindow)) - xPointer)
             # Else, Continue Searching
             else:
                 maxHeightPointer = dataPointer
@@ -231,7 +273,9 @@ class signalProcessing:
         # Base Case
         xPointer = min(max(xPointer, 0), len(data)-1)
         if abs(binarySearchWindow) < 1 or maxPointsSearch == 0:
-            return xPointer - 1 + np.argmax(data[max(0,xPointer-1):xPointer+2]) 
+            searchSegment = data[max(0,xPointer-1):min(xPointer+2, len(data))]
+            xPointer -= np.where(searchSegment==data[xPointer])[0][0]
+            return xPointer + np.argmax(searchSegment)
         
         minHeightPointer = xPointer; minHeight = data[xPointer];
         searchDirection = binarySearchWindow//abs(binarySearchWindow)
@@ -250,38 +294,40 @@ class signalProcessing:
     
     
     def findLinearBaseline(self, xData, yData, peakInd):
-        maxBadPoints = int(len(xData)/5)
-        ignoreBoundaryPoints = int(self.startStimulus*self.samplingFreq/2)
-        
-        # Divide the yData into Two Groups: Left and Right
-        leftData = yData[ignoreBoundaryPoints:peakInd]
-        rightData = yData[peakInd+1:len(yData)]
+        # Define a threshold for distinguishing good/bad lines
+        maxBadPointsTotal = int(len(xData)/10)
         # Store Possibly Good Tangent Indexes
-        goodTangentInd = [[] for _ in range(maxBadPoints+1)]
-                                
+        goodTangentInd = [[] for _ in range(maxBadPointsTotal)]
+        
         # For Each Index Pair on the Left and Right of the Peak
-        for rightInd, rightPoint in enumerate(rightData):
-            rightInd = rightInd + peakInd + 1
-            
-            for leftInd, leftPoint in enumerate(leftData):
-                leftInd = leftInd + ignoreBoundaryPoints
+        for rightInd in range(peakInd+2, len(yData), 1):
+            for leftInd in range(peakInd-2, self.minLeftBoundaryInd, -1):
+                
+                # Initialize range of data to check
+                checkPeakBuffer = int((rightInd - leftInd)/4)
+                xDataCut = xData[max(0, leftInd - checkPeakBuffer):rightInd + checkPeakBuffer]
+                yDataCut = yData[max(0, leftInd - checkPeakBuffer):rightInd + checkPeakBuffer]
                 
                 # Draw a Linear Line Between the Points
                 lineSlope = (yData[leftInd] - yData[rightInd])/(xData[leftInd] - xData[rightInd])
                 slopeIntercept = yData[leftInd] - lineSlope*xData[leftInd]
-                linearFit = lineSlope*xData + slopeIntercept
+                linearFit = lineSlope*xDataCut + slopeIntercept
 
-                # # Find the Number of Points Above the Tangent Line
-                numWrongSideOfTangent = len(linearFit[(linearFit - yData) > 0])
-                        
+                # Find the Number of Points Above the Tangent Line
+                numWrongSideOfTangent = len(linearFit[linearFit - yDataCut > 0])
+                
                 # If a Tangent Line is Drawn Correctly, Return the Tangent Points' Indexes
-                if numWrongSideOfTangent <= maxBadPoints:
+                # if numWrongSideOfTangent == 0 and rightInd - leftInd > self.minPeakDuration:
+                #     return (leftInd, rightInd)
+                # Define a threshold for distinguishing good/bad lines
+                maxBadPoints = int(len(linearFit)/10) # Minimum 1/6
+                if numWrongSideOfTangent < maxBadPoints and rightInd - leftInd > self.minPeakDuration:
                     goodTangentInd[numWrongSideOfTangent].append((leftInd, rightInd))
                     
         # If Nothing Found, Try and Return a Semi-Optimal Tangent Position
-        for goodInd in range(maxBadPoints):
+        for goodInd in range(maxBadPointsTotal):
             if len(goodTangentInd[goodInd]) != 0:
-                return min(goodTangentInd[goodInd], key=lambda tangentPair: tangentPair[1]-tangentPair[0])
+                return max(goodTangentInd[goodInd], key=lambda tangentPair: tangentPair[1]-tangentPair[0])
         return None, None
     
     def findLineIntersectionPoint(self, leftLineParams, rightLineParams):
@@ -295,32 +341,91 @@ class signalProcessing:
         elif yData[xPointer - bufferSearch] < yData[xPointer + bufferSearch]:
             return xPointer
     
-    def extractFeatures(self, xData, baselineData, peakInd, chemicalName):
-        # ----------------------- Derivative Analysis ----------------------- #        
+    def calculateCurvature(self, xData, yData):
+        # Calculate Derivatives
+        dx_dt = np.gradient(xData); dx_dt2 = np.gradient(dx_dt); 
+        dy_dt = np.gradient(yData); dy_dt2 = np.gradient(dy_dt);
+        
+        # Calculate Peak Shape parameters
+        speed = np.sqrt(dx_dt * dx_dt + dy_dt * dy_dt)
+        curvature = np.abs((dx_dt2 * dy_dt - dx_dt * dy_dt2)) / speed**3  # Units 1/Volts
+        # Return the Curvature
+        return curvature
+        
+    def extractFeatures_Pointwise(self, xData, baselineData, peakInd, chemicalName):
+        # ----------------------- Derivative Analysis ----------------------- #   
+        # Normalize the Data
+        baselineData = baselineData/baselineData[peakInd]
+        xData = xData/baselineData[peakInd]
         # Calculate the Signal Derivatives
-        velocity = np.gradient(baselineData, xData)
-        acceleration = np.gradient(velocity, xData)
-        thirdDeriv = np.gradient(acceleration, xData)
-        forthDeriv = np.gradient(thirdDeriv, xData)
+        velocity = np.gradient(baselineData, xData, edge_order = 2)
+        acceleration = np.gradient(velocity, xData, edge_order = 2)
+        thirdDeriv = np.gradient(acceleration, xData, edge_order = 2)
+        forthDeriv = np.gradient(thirdDeriv, xData, edge_order = 2)
 
         # Find the Velocity Extremas
-        leftVelPeakInd = self.findNearbyMaximum(velocity, peakInd, binarySearchWindow = -2)
+        leftVelPeakInd = self.findNearbyMaximum(velocity, peakInd, binarySearchWindow = -1)
+        rightVelPeakInd = self.findNearbyMinimum(velocity, peakInd, binarySearchWindow = 1)
+        # ------------------------------------------------------------------- #
+        
+        peakHeight = baselineData[peakInd]
+        plt.show()
+        plt.plot(xData, baselineData, 'k', linewidth= 2)
+        plt.plot(xData[peakInd], baselineData[peakInd], 'bo')
+        plt.plot(xData, peakHeight*velocity/max(abs(velocity)), 'tab:blue')
+        plt.plot(xData, peakHeight*acceleration/max(abs(acceleration)), 'tab:red')
+        plt.plot(xData[[leftVelPeakInd, rightVelPeakInd]], (peakHeight*velocity/max(abs(velocity)))[[leftVelPeakInd, rightVelPeakInd]], 'o')
+        plt.ylim([-peakHeight*1.1, peakHeight*1.1])
+        plt.show()
+
+        # ----------------------- Store Peak Features ----------------------- #
+        peakFeatures = []
+        for peakInd in range(leftVelPeakInd, rightVelPeakInd+1):
+            peakFeatures.append([baselineData[peakInd], velocity[peakInd], acceleration[peakInd], thirdDeriv[peakInd], forthDeriv[peakInd]])
+        return peakFeatures
+        # ------------------------------------------------------------------- #
+    
+    def extractFeatures(self, xData, baselineData, peakInd, chemicalName):
+        # Normalize the Data
+        baselineData = baselineData/baselineData[peakInd]
+        xData = xData/baselineData[peakInd]
+        # ----------------------- Derivative Analysis ----------------------- #        
+        # Calculate the Signal Derivatives
+        velocity = np.gradient(baselineData, xData, edge_order = 2)
+        acceleration = np.gradient(velocity, xData, edge_order = 2)
+        thirdDeriv = np.gradient(acceleration, xData, edge_order = 2)
+        forthDeriv = np.gradient(thirdDeriv, xData, edge_order = 2)
+
+        # Find the Velocity Extremas
+        leftVelPeakInd = self.findNearbyMaximum(velocity, peakInd, binarySearchWindow = -1)
         rightVelPeakInd = self.findNearbyMinimum(velocity, peakInd, binarySearchWindow = 1)
 
-        # Find Third Derivative Extremas
+        # Find Third Derivative Extremas on Right
         thirdDerivRightMax_Temp = self.findNearbyMaximum(thirdDeriv, rightVelPeakInd, binarySearchWindow = 2)
         thirdDerivRightMax = self.findNearbyMaximum(thirdDeriv, rightVelPeakInd, binarySearchWindow = -2)
         thirdDerivRightMax = max([thirdDerivRightMax, thirdDerivRightMax_Temp], key = lambda ind: thirdDeriv[ind])
-        thirdDerivRightMin = self.findNearbyMinimum(thirdDeriv, thirdDerivRightMax, binarySearchWindow = 25)
+        thirdDerivRightMin = self.findNearbyMinimum(thirdDeriv, thirdDerivRightMax, binarySearchWindow = 2)
         
-        # Find the Acceleration Extremas
+        # Find Third Derivative Extremas on Left: Min
+        thirdDerivLeftMin = self.findNearbyMinimum(thirdDeriv, leftVelPeakInd, binarySearchWindow = -2)
+        if abs(thirdDerivLeftMin - leftVelPeakInd) < 5:
+            thirdDerivLeftMin = self.findNearbyMinimum(thirdDeriv, leftVelPeakInd, binarySearchWindow = 2)
+        # Find Third Derivative Extremas on Left: Max
+        thirdDerivLeftMax = self.findNearbyMaximum(thirdDeriv, thirdDerivLeftMin, binarySearchWindow = 3)
+        if abs(thirdDerivLeftMin - thirdDerivLeftMax) < 5:
+            thirdDerivLeftMax = self.findNearbyMaximum(thirdDeriv, thirdDerivLeftMin, binarySearchWindow = 5)
+
+        # Find the Acceleration Extremas on Left: Max
         maxAccelLeftInd = self.findNearbyMaximum(acceleration, leftVelPeakInd, binarySearchWindow = -2)
-        # Find the First Maximum in the Acceleration After the Peak (Two Ways)
-        maxAccelRightInd_Temp = self.findNearbyMaximum(acceleration, thirdDerivRightMin, binarySearchWindow = -2)
-        maxAccelRightInd = thirdDerivRightMax + np.argmin(abs(thirdDeriv[thirdDerivRightMax: thirdDerivRightMin]))
-        # If They are Similar, Trust the findMaximum Way More
-        if abs(maxAccelRightInd_Temp - maxAccelRightInd) < 5:
-            maxAccelRightInd = maxAccelRightInd_Temp
+        # fourthDerivStartLeftSlopeInd = self.findNearbyMaximum(forthDeriv, leftVelPeakInd, binarySearchWindow = -2)
+        # fourthDerivStartLeftSlopeInd = self.findNearbyMinimum(forthDeriv, fourthDerivStartLeftSlopeInd, binarySearchWindow = -2)
+        # Find the Acceleration Extremas on Left: Min
+        minAccelLeftInd_Temp = self.findNearbyMinimum(acceleration, peakInd, binarySearchWindow = -1)
+        minAccelLeftInd = self.findNearbyMinimum(acceleration, peakInd, binarySearchWindow = 1)
+        minAccelLeftInd = min(minAccelLeftInd_Temp, minAccelLeftInd, key = lambda ind: acceleration[ind])
+
+        # Find the Acceleration Extremas on Right: Max
+        maxAccelRightInd = self.findNearbyMaximum(acceleration, thirdDerivRightMin, binarySearchWindow = -2)
         # Find the Drop in the Acceleration IF PRESENT (If Not, IT IS THE SAME AS maxAccelRightInd)
         minAccelRightInd = self.findNearbyMinimum(acceleration, thirdDerivRightMin, binarySearchWindow = 1)
         # If Accel Peak on the Right is a Saddle Point, Get the Boundaries
@@ -329,87 +434,67 @@ class signalProcessing:
             minAccelRightInd = self.findNearbyMaximum(forthDeriv, minAccelRightInd, binarySearchWindow = 1)
         # ------------------------------------------------------------------- #
         
-        # ------------------------ Cull Bad Features ------------------------ #  
-        # Cull Noisy Data -> Increase Sampling Frequency
-        accelInds = scipy.signal.find_peaks(abs(acceleration), prominence=.00001)[0]
-        if len(accelInds) > 6:
-            print("Data Too Noisy")
-            return []
+        peakHeight = baselineData[peakInd]
+        plt.show()
+        plt.plot(xData, baselineData, 'k', linewidth= 2)
+        plt.plot(xData[peakInd], baselineData[peakInd], 'bo')
+        plt.plot(xData, peakHeight*velocity/max(abs(velocity)), 'tab:blue')
+        plt.plot(xData, peakHeight*acceleration/max(abs(acceleration)), 'tab:red')
+        plt.plot(xData, peakHeight*thirdDeriv/max(abs(thirdDeriv[maxAccelLeftInd:minAccelRightInd])), 'tab:brown')
+        plt.plot(xData, peakHeight*forthDeriv/max(abs(forthDeriv[maxAccelLeftInd:minAccelRightInd])), 'tab:purple')
+        plt.plot(xData[[leftVelPeakInd, rightVelPeakInd]], (peakHeight*velocity/max(abs(velocity)))[[leftVelPeakInd, rightVelPeakInd]], 'o')
+        plt.plot(xData[[maxAccelRightInd, minAccelLeftInd, minAccelRightInd, maxAccelLeftInd]], (peakHeight*acceleration/max(abs(acceleration)))[[maxAccelRightInd, minAccelLeftInd, minAccelRightInd, maxAccelLeftInd]], 'o')
+        plt.plot(xData[[thirdDerivLeftMax, thirdDerivLeftMin, thirdDerivRightMin, thirdDerivRightMax]], (peakHeight*thirdDeriv/max(abs(thirdDeriv[maxAccelLeftInd:minAccelRightInd])))[[thirdDerivLeftMax, thirdDerivLeftMin, thirdDerivRightMin, thirdDerivRightMax]], 'o')
+        plt.ylim([-peakHeight*1.1, peakHeight*1.1])
+        plt.show()
         
-        # If Any Index is Near the Border, the Data Could be MisCut
-        if len(xData) - rightVelPeakInd < 50 or len(xData) - minAccelRightInd < 50:
-            return []
-        # ------------------------------------------------------------------- #
-
         # -------------------------- Time Features -------------------------- #   
         # Peak Durations
-        peakDuration = xData[-1] - xData[0]
+        peakDurationFull = xData[-1] - xData[0]
         peakRiseDuration = xData[peakInd] - xData[0]
-        peakFallDuration = peakDuration - peakRiseDuration
+        peakFallDuration = peakDurationFull - peakRiseDuration
+        peakDurationRatio = peakRiseDuration/peakFallDuration
         
         # Velocity Intervals
         velInterval = xData[rightVelPeakInd] - xData[leftVelPeakInd]
         velRiseToPeak = xData[peakInd] - xData[leftVelPeakInd]
         velFallToPeak = xData[rightVelPeakInd] - xData[peakInd]
-        # Acceleration Intervals
-        accelInterval1 = xData[peakInd] - xData[maxAccelLeftInd]
-        accelInterval2 = xData[maxAccelRightInd] - xData[peakInd]
-        accelInterval3 = xData[minAccelRightInd] - xData[maxAccelRightInd]
-        accelInterval4 = xData[minAccelRightInd] - xData[maxAccelLeftInd]
-        accelInterval5 = xData[maxAccelLeftInd] - xData[maxAccelLeftInd]
-        # Third Deriv Intervals
-        thirdDerivInterval = xData[thirdDerivRightMin] - xData[thirdDerivRightMax]
         
-        # Mixed Intervals
-        thirdDerivAccelInterval1 = xData[rightVelPeakInd] - xData[thirdDerivRightMax]
-        accelToVelLeft = xData[leftVelPeakInd] - xData[maxAccelLeftInd]
-        accelToVelRight = xData[rightVelPeakInd] - xData[maxAccelRightInd]
+        # Acceleration Intervals
+        minAccelToPeak = xData[peakInd] - xData[minAccelLeftInd]
+        minAccelToVelLeft = xData[minAccelLeftInd] - xData[leftVelPeakInd]
+        minAccelToVelRight = xData[rightVelPeakInd] - xData[minAccelLeftInd]
+        leftAccelInterval = xData[minAccelLeftInd] - xData[maxAccelLeftInd]
+        rightAccelInterval = xData[minAccelRightInd] - xData[maxAccelRightInd]
 
-        # Time Ratios
-        peakDurationRatio = peakRiseDuration/peakFallDuration
+        # Third Deriv Intervals
+        thirdDerivRightInterval = xData[thirdDerivRightMin] - xData[thirdDerivRightMax]
+        thirdDerivLeftInterval = xData[thirdDerivLeftMax] - xData[thirdDerivLeftMin]
         # ------------------------------------------------------------------- #
         
         # -------------------------- Slope Features --------=---------------- #     
-        # Peak Slope Features
+        # Get Full Slope Parameters
         upSlope_Full = np.polyfit(xData[maxAccelLeftInd:leftVelPeakInd], baselineData[maxAccelLeftInd:leftVelPeakInd], 1)
         downSlope_Full = np.polyfit(xData[thirdDerivRightMax:maxAccelRightInd], baselineData[thirdDerivRightMax:maxAccelRightInd], 1)
-        upSlope = upSlope_Full[0]; downSlope = downSlope_Full[0]
-        
-        # Velocity Slope
-        velSlope = np.polyfit(xData[leftVelPeakInd:rightVelPeakInd], baselineData[leftVelPeakInd:rightVelPeakInd], 1)[0]
-        # Acceleration Slope Features
-        accelEndStimulusSlope = np.polyfit(xData[thirdDerivRightMax:thirdDerivRightMin], baselineData[thirdDerivRightMax:thirdDerivRightMin], 1)[0]
-        # Third Derivative Slope Features
-        thirdDerivEndStimulusSlope = np.polyfit(xData[maxAccelRightInd:minAccelRightInd], baselineData[maxAccelRightInd:minAccelRightInd], 1)[0]
+        # Get Slope Features
+        upSlope = upSlope_Full[0]
+        downSlope = downSlope_Full[0]
         # ------------------------------------------------------------------- #
         
         # ------------------------ Amplitude Features ----------------------- #  
         # Amplitudes Based on the Baseline Extremas
-        peakAmp = baselineData[peakInd]
-        velAmp = velocity[peakInd]
-        accelAmp = acceleration[peakInd]
+        peakHeight = baselineData[peakInd]
         # Amplitudes Based on the Velocity Extremas
         maxUpSlopeConc, maxDownSlopeConc = baselineData[[leftVelPeakInd, rightVelPeakInd]]
         maxUpSlopeVel, maxDownSlopeVel = velocity[[leftVelPeakInd, rightVelPeakInd]]
-        maxUpSlopeAccel, maxDownSlopeAccel = acceleration[[leftVelPeakInd, rightVelPeakInd]]
         # Amplitudes Based on the Acceleration Extremas
-        maxAccelLeftConc, maxAccelRightConc, minAccelRightConc = baselineData[[maxAccelLeftInd, maxAccelRightInd, minAccelRightInd]]
-        maxAccelLeftVel, maxAccelRightVel, minAccelRightVel = velocity[[maxAccelLeftInd, maxAccelRightInd, minAccelRightInd]]
-        maxAccelLeftAccel, maxAccelRightAccel, minAccelRightAccel = acceleration[[maxAccelLeftInd, maxAccelRightInd, minAccelRightInd]]
-        # Amplitudes Based on the Velocity Extremas
-        thirdDerivRightMaxConc, thirdDerivRightMinConc = baselineData[[thirdDerivRightMax, thirdDerivRightMin]]
-        thirdDerivRightMaxVel, thirdDerivRightMinVel = velocity[[thirdDerivRightMax, thirdDerivRightMin]]
-        thirdDerivRightVel, thirdDerivRightVel = acceleration[[thirdDerivRightMax, thirdDerivRightMin]]
-        
+        maxAccelLeftConc, minAccelLeftConc, maxAccelRightConc, minAccelRightConc = baselineData[[maxAccelLeftInd, minAccelLeftInd, maxAccelRightInd, minAccelRightInd]]
+        maxAccelLeftAccel, minAccelLeftAccel, maxAccelRightAccel, minAccelRightAccel = acceleration[[maxAccelLeftInd, minAccelLeftInd, maxAccelRightInd, minAccelRightInd]]
+
         # Velocity Amplitudes
         velDiffConc = maxUpSlopeConc - maxDownSlopeConc
-        velDiffVel = maxUpSlopeVel - maxDownSlopeVel
-        velDiffAccel = maxUpSlopeAccel - maxDownSlopeAccel
-        
-        # Find Peak's Tent Features
-        peakTentX, peakTentY = self.findLineIntersectionPoint(upSlope_Full, downSlope_Full)
-        tentDeviationX = peakTentX - xData[peakInd]
-        tentDeviationY = peakTentY - baselineData[peakInd]
+        # Acceleration Amplitudes
+        accelDiffRightConc = maxAccelRightConc - minAccelRightConc
         # ------------------------------------------------------------------- #
 
         # --------------------- Under the Curve Features -------------------- #        
@@ -419,62 +504,105 @@ class signalProcessing:
         rightArea = peakArea - leftArea
         
         # General Areas
-        velToVelArea = scipy.integrate.simpson(baselineData[leftVelPeakInd:rightVelPeakInd], xData[leftVelPeakInd:rightVelPeakInd])
+        velToVelArea = scipy.integrate.simpson(abs(baselineData[leftVelPeakInd:rightVelPeakInd]), xData[leftVelPeakInd:rightVelPeakInd])
+        # ------------------------------------------------------------------- #
+        
+        # ----------------------- Peak Shape Features ----------------------- #        
+        # Find Peak's Tent Features
+        peakTentX, peakTentY = self.findLineIntersectionPoint(upSlope_Full, downSlope_Full)
+        tentDeviationX = peakTentX - xData[peakInd]
+        tentDeviationY = peakTentY - baselineData[peakInd]
 
-        # Average of the Pulse
-        geometricMean = gmean(baselineData)
-        peakAverage = np.mean(baselineData)
+        # Calculate the New Baseline of the Peak
+        startBlinkX, _ = self.findLineIntersectionPoint([0, 0], upSlope_Full)
+        endBlinkX, _ = self.findLineIntersectionPoint(downSlope_Full, [0, 0])
+        
+        # Calculate the New Baseline's Index
+        # startBlinkInd = np.argmin(abs(xData - startBlinkX))
+        # endBlinkInd = np.argmin(abs(xData - endBlinkX))
+        
+        blinkDuration_Final = endBlinkX - startBlinkX
+        
+        # Shape Parameters
+        peakAverage = np.mean(baselineData[leftVelPeakInd:rightVelPeakInd])
+        peakSTD = np.std(baselineData[leftVelPeakInd:rightVelPeakInd], ddof=1)
+        peakEntropy = entropy(baselineData[leftVelPeakInd:rightVelPeakInd])
+        peakSkew = skew(baselineData[leftVelPeakInd:rightVelPeakInd], bias=False)
+        peakKurtosis = kurtosis(baselineData[leftVelPeakInd:rightVelPeakInd], fisher=True, bias = False)
+        
+        baselineDataFFT = fft(baselineData)[leftVelPeakInd:rightVelPeakInd]
+        peakAverageFFT = abs(np.mean(baselineDataFFT))
+        peakSTD_FFT = np.std(baselineDataFFT, ddof=1)
+        peakEntropyFFT = entropy(abs(baselineDataFFT))
+        
+        peakHeightFFT = abs(baselineDataFFT[peakInd - leftVelPeakInd])
+        leftVelHeightFFT = abs(baselineDataFFT[peakInd])
+        rightVelHeightFFT = abs(baselineDataFFT[peakInd - leftVelPeakInd + rightVelPeakInd])
+        
+        curvature = self.calculateCurvature(xData, baselineData)
+        peakCurvature = curvature[peakInd]
+        leftVelCurvature = curvature[leftVelPeakInd]
+        rightVelCurvature = curvature[rightVelPeakInd]
         # ------------------------------------------------------------------- #
         
         # -------------------------- Ratio Features ------------------------- #        
         # ------------------------------------------------------------------- #
         
+        # ------------------------ Cull Bad Features ------------------------ #  
+        if blinkDuration_Final > 2000:
+            print("Bad blinkDuration_Final:", blinkDuration_Final)
+            return []
+        # ------------------------------------------------------------------- #
+
         # ----------------------- Store Peak Features ----------------------- #
         peakFeatures = []
         # Saving Features from Section: Time Features
-        peakFeatures.extend([peakDuration, peakRiseDuration, peakFallDuration])
-        peakFeatures.extend([velInterval, velRiseToPeak, velFallToPeak, peakDurationRatio])
-        peakFeatures.extend([accelInterval1, accelInterval2, accelInterval3, accelInterval4, accelInterval5])
-        peakFeatures.extend([thirdDerivInterval, thirdDerivAccelInterval1, accelToVelLeft, accelToVelRight])
+        peakFeatures.extend([peakDurationFull, peakRiseDuration, peakFallDuration, peakDurationRatio])
+        peakFeatures.extend([velInterval, velRiseToPeak, velFallToPeak])
+        peakFeatures.extend([minAccelToPeak, minAccelToVelLeft, minAccelToVelRight, leftAccelInterval, rightAccelInterval])
+        peakFeatures.extend([thirdDerivRightInterval, thirdDerivLeftInterval])
+        
+        # Saving Features from Section: Amplitude Features
+        peakFeatures.extend([peakHeight])
+        peakFeatures.extend([maxUpSlopeConc, maxDownSlopeConc, maxUpSlopeVel, maxDownSlopeVel])
+        peakFeatures.extend([maxAccelLeftConc, maxAccelRightConc, minAccelRightConc])
+        peakFeatures.extend([maxAccelLeftAccel, minAccelLeftAccel, maxAccelRightAccel, minAccelRightAccel])
+        peakFeatures.extend([velDiffConc, accelDiffRightConc])
+        
         # Saving Features from Section: Slope Features
-        peakFeatures.extend([upSlope, downSlope, velSlope, accelEndStimulusSlope, thirdDerivEndStimulusSlope])
-        # Saving Features from Section: Assmplitude Features
-        peakFeatures.extend([peakAmp, velAmp, accelAmp])
-        peakFeatures.extend([maxUpSlopeConc, maxDownSlopeConc, maxUpSlopeVel, maxDownSlopeVel, maxUpSlopeAccel, maxDownSlopeAccel])
-        peakFeatures.extend([maxAccelLeftConc, maxAccelRightConc, minAccelRightConc, maxAccelLeftVel, maxAccelRightVel, minAccelRightVel, maxAccelLeftAccel, maxAccelRightAccel, minAccelRightAccel])
-        peakFeatures.extend([thirdDerivRightMaxConc, thirdDerivRightMinConc, thirdDerivRightMaxVel, thirdDerivRightMinVel, thirdDerivRightVel, thirdDerivRightVel])
-        peakFeatures.extend([velDiffConc, velDiffVel, velDiffAccel])
-        peakFeatures.extend([peakTentX, peakTentY, tentDeviationX, tentDeviationY])
+        peakFeatures.extend([upSlope, downSlope])
+        
         # Saving Features from Section: Under the Curve Features
-        peakFeatures.extend([peakArea, leftArea, rightArea, velToVelArea])
-        peakFeatures.extend([geometricMean, peakAverage])
+        peakFeatures.extend([leftArea, rightArea, velToVelArea])
+        
+        # Saving Features from Section: Peak Shape Features
+        peakFeatures.extend([peakTentX, peakTentY, tentDeviationX, tentDeviationY, blinkDuration_Final])
+        peakFeatures.extend([peakAverage, peakSTD, peakSkew, peakKurtosis])
+
         # ------------------------------------------------------------------- #
         
-        if True:
+        if False:
             plt.plot(xData, baselineData, 'k', linewidth= 2)
             plt.plot(xData[peakInd], baselineData[peakInd], 'bo')
-            plt.plot(xData, peakAmp*velocity/max(abs(velocity)), 'tab:blue')
-            plt.plot(xData, peakAmp*acceleration/max(abs(acceleration)), 'tab:red')
-            plt.plot(xData, peakAmp*thirdDeriv/max(abs(thirdDeriv[maxAccelLeftInd:minAccelRightInd])), 'tab:brown')
-            #plt.plot(xData, peakAmp*forthDeriv/max(abs(forthDeriv[maxAccelLeftInd:minAccelRightInd])), 'tab:purple')
+            plt.plot(xData, peakHeight*velocity/max(abs(velocity)), 'tab:blue')
+            plt.plot(xData, peakHeight*acceleration/max(abs(acceleration)), 'tab:red')
+            plt.plot(xData, peakHeight*thirdDeriv/max(abs(thirdDeriv[maxAccelLeftInd:minAccelRightInd])), 'tab:brown')
+            plt.plot(xData, peakHeight*forthDeriv/max(abs(forthDeriv[maxAccelLeftInd:minAccelRightInd])), 'tab:purple')
 
-            plt.plot(xData[[leftVelPeakInd, rightVelPeakInd]], (peakAmp*velocity/max(abs(velocity)))[[leftVelPeakInd, rightVelPeakInd]], 'o')
-            plt.plot(xData[[maxAccelRightInd, minAccelRightInd, maxAccelLeftInd]], (peakAmp*acceleration/max(abs(acceleration)))[[maxAccelRightInd, minAccelRightInd, maxAccelLeftInd]], 'o')
-            plt.plot(xData[[thirdDerivRightMin, thirdDerivRightMax]], (peakAmp*thirdDeriv/max(abs(thirdDeriv[maxAccelLeftInd:minAccelRightInd])))[[thirdDerivRightMin, thirdDerivRightMax]], 'o')
-
-            velInds = scipy.signal.find_peaks(abs(velocity), prominence=.00001)[0]
-            plt.title(chemicalName + " VelInds: " + str(len(velInds)) + " AccelInds: " + str(len(accelInds)))
-            plt.ylim([-peakAmp*1.1, peakAmp*1.1])
-            plt.show()
+            plt.plot(xData[[leftVelPeakInd, rightVelPeakInd]], (peakHeight*velocity/max(abs(velocity)))[[leftVelPeakInd, rightVelPeakInd]], 'o')
+            plt.plot(xData[[maxAccelRightInd, minAccelLeftInd, minAccelRightInd, maxAccelLeftInd]], (peakHeight*acceleration/max(abs(acceleration)))[[maxAccelRightInd, minAccelLeftInd, minAccelRightInd, maxAccelLeftInd]], 'o')
+            plt.plot(xData[[thirdDerivLeftMax, thirdDerivLeftMin, thirdDerivRightMin, thirdDerivRightMax]], (peakHeight*thirdDeriv/max(abs(thirdDeriv[maxAccelLeftInd:minAccelRightInd])))[[thirdDerivLeftMax, thirdDerivLeftMin, thirdDerivRightMin, thirdDerivRightMax]], 'o')
         
-        return peakFeatures
+        return [peakFeatures]
     
     def plot(self, xData, yData, baselineData, linearFit, peakInd, leftCutInd, rightCutInd, chemicalName = "Chemical"):
         plt.plot(xData, yData, 'k', linewidth=2)
         plt.plot(xData[peakInd], yData[peakInd], 'bo')
         plt.plot(xData[[leftCutInd,rightCutInd]], yData[[leftCutInd,rightCutInd]], 'ro')
-        plt.plot(xData, linearFit, 'r', alpha=0.5)
-        plt.plot(xData, baselineData, 'tab:brown', linewidth=1.5)
+        if len(linearFit) > 0:
+            plt.plot(xData, linearFit, 'r', alpha=0.5)
+        if len(baselineData) > 0:
+            plt.plot(xData, baselineData, 'tab:brown', linewidth=1.5)
          # Add Figure Title and Labels
         plt.title(chemicalName + " Data")
         plt.xlabel("Time (Sec)")

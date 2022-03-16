@@ -78,9 +78,13 @@ class featureAnalysis:
             plt.clf()
             
     
-    def correlationMatrix(self):
+    def correlationMatrix(self, featureList, featureNames):
+        # Create Directory to Save the Figures
+        saveDataFolder = self.saveDataFolder + "correlationMatrix/"
+        os.makedirs(saveDataFolder, exist_ok=True)
+        
         # Perform Deepcopy to Not Edit Features
-        signalData = deepcopy(self.featureList); signalLabels = deepcopy(self.featureNames)
+        signalData = np.array(deepcopy(featureList)); signalLabels = np.array(deepcopy(featureNames))
         
         # Standardize the Feature
         for i in range(len(signalData[0])):
@@ -88,10 +92,14 @@ class featureAnalysis:
         
         matrix = np.array(np.corrcoef(signalData.T)); 
         sns.set_theme(); ax = sns.heatmap(matrix, cmap='icefire', xticklabels=signalLabels, yticklabels=signalLabels)
+        # Save the Figure
+        sns.set(rc={'figure.figsize':(50,35)})
+        fig = ax.get_figure(); fig.savefig(saveDataFolder + "correlationMatrixFull.png", dpi=300)
+        plt.show()
         
         # Cluster the Similar Features
-        signalLabelsX = deepcopy(signalLabels)
-        signalLabelsY = deepcopy(signalLabels)
+        signalLabelsX = np.array(deepcopy(signalLabels))
+        signalLabelsY = np.array(deepcopy(signalLabels))
         for i in range(1,len(matrix)):
             signalLabelsX = signalLabelsX[matrix[:,i].argsort()]
             matrix = matrix[matrix[:,i].argsort()]
@@ -102,8 +110,9 @@ class featureAnalysis:
         sns.set_theme(); ax = sns.heatmap(matrix, cmap='icefire', xticklabels=signalLabelsX, yticklabels=signalLabelsY)
         # Save the Figure
         sns.set(rc={'figure.figsize':(50,35)})
-        fig = ax.get_figure(); fig.savefig("../output.png", dpi=300)
-        
+        fig = ax.get_figure(); fig.savefig(saveDataFolder + "correlationMatrixSorted.png", dpi=300)
+        plt.show()
+
         # Remove Small Correlations
         for i in range(len(matrix)):
             for j in range(len(matrix)):
@@ -111,13 +120,16 @@ class featureAnalysis:
                     matrix[i][j] = 0
         # Plot the New Correlations
         sns.set_theme(); ax = sns.heatmap(matrix, cmap='icefire', xticklabels=signalLabelsX, yticklabels=signalLabelsY)
-                    
+        # Save the Figure
+        sns.set(rc={'figure.figsize':(50,35)})
+        fig = ax.get_figure(); fig.savefig(saveDataFolder + "correlationMatrixSortedCull.png", dpi=300)            
+        plt.show()
     
     def featureComparison(self, featureList1, featureList2, featureLabels, featureNames, xChemical, yChemical):
         # Create Directory to Save the Figures
-        saveDataFolder = self.saveDataFolder + "chemicalFeatureComparison/"
+        saveDataFolder = self.saveDataFolder + "chemicalFeatureComparison/" + xChemical + " vs " + yChemical + "/"
         os.makedirs(saveDataFolder, exist_ok=True)
-        
+                
         featureList1 = np.array(featureList1)
         featureList2 = np.array(featureList2)
         
@@ -132,25 +144,37 @@ class featureAnalysis:
                 features2 = featureList2[:, featureInd2]
                 
                 fig = plt.figure()
+                addedLegend = []
                 for ind in range(len(featureLabels)):
                     labelInd = featureLabels[ind]
-                    plt.plot(features1[ind], features2[ind], colorList[labelInd], label=labelList[labelInd])
+                    if labelList[labelInd] not in addedLegend:
+                        addedLegend.append(labelList[labelInd])
+                        plt.plot(features1[ind], features2[ind], colorList[labelInd], label=labelList[labelInd])
+                    else:
+                        plt.plot(features1[ind], features2[ind], colorList[labelInd])
                 
                 plt.xlabel(xChemical + ": " + featureNames[featureInd1])
                 plt.ylabel(yChemical + ": " + featureNames[featureInd2])
                 plt.title("Feature Comparison")
                 plt.legend()
                 # Save the Figure
-                fig.savefig(saveDataFolder + featureNames[featureInd1] + "_" + featureNames[featureInd2] + ".png", dpi=300, bbox_inches='tight')
+                saveDataFolderFeature1 = saveDataFolder + featureNames[featureInd1] + "/"
+                os.makedirs(saveDataFolderFeature1, exist_ok=True)
+                fig.savefig(saveDataFolderFeature1 + featureNames[featureInd1] + "_" + featureNames[featureInd2] + ".png", dpi=300, bbox_inches='tight')
             
-                plt.show()
-    
+                # Clear the Figure        
+                fig.clear()
+                plt.close(fig)
+                plt.cla()
+                plt.clf()    
+                
     def singleFeatureComparison(self, featureListFull, featureLabelFull, chemicalOrder, featureNames):
         # Create Directory to Save the Figures
         saveDataFolder = self.saveDataFolder + "singleChemicalFeatureComparison/"
         os.makedirs(saveDataFolder, exist_ok=True)
         
         colorList = ['ko', 'ro', 'bo']
+        labelList = ['Cold', 'Exercise', 'VR']
         #labelList = ['Cold', 'Exercise', 'VR']
         for chemicalInd in range(len(chemicalOrder)):
             chemicalName = chemicalOrder[chemicalInd]
@@ -165,19 +189,27 @@ class featureAnalysis:
                 features = featureList[:, featureInd]
                 
                 fig = plt.figure()
+                addedLegend = []
                 for ind in range(len(featureLabels)):
                     labelInd = featureLabels[ind]
-                    plt.plot(features[ind], [0], colorList[labelInd])
+                    if labelInd not in addedLegend:
+                        addedLegend.append(labelInd)
+                        plt.plot(features[ind], [0], colorList[labelInd], label=labelList[labelInd])
+                    else:
+                        plt.plot(features[ind], [0], colorList[labelInd])
                 
                 plt.xlabel(chemicalName + ": " + featureNames[featureInd])
                 plt.ylabel("Constant")
                 plt.title("Feature Comparison")
-               # plt.legend()
+                plt.legend()
                 # Save the Figure
                 fig.savefig(saveDataFolderChemical + featureNames[featureInd] + ".png", dpi=300, bbox_inches='tight')
             
-                plt.show()
-
+                # Clear the Figure        
+                fig.clear()
+                plt.close(fig)
+                plt.cla()
+                plt.clf()
             
             
             

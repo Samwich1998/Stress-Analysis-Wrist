@@ -50,9 +50,8 @@ import featureAnalysis  # Functions for Feature Analysis
 if __name__ == "__main__":
     # ---------------------------------------------------------------------- #
     #    User Parameters to Edit (More Complex Edits are Inside the Files)   #
-    # ---------------------------------------------------------------------- #
-    #sys.exit()
-    
+    # ---------------------------------------------------------------------- #    
+   # sys.exit()
     
     # Specify Which Program to Run; All Can be Run in One Scirpt (NOT Simutaneously Yet)
     analyzePulse = False
@@ -109,7 +108,7 @@ if __name__ == "__main__":
         saveChemicalData = True
         analyzeFeatures = True
         if saveChemicalData:
-            saveDataFolderChemical = "./Output Data/Chemical Data/Initial List/"  # Data Folder to Save the Data; MUST END IN '/'
+            saveDataFolderChemical = "./Output Data/Chemical Data/Add Smoothing/"  # Data Folder to Save the Data; MUST END IN '/'
     
     # ---------------------------------------------------------------------- #
     # ---------------------------------------------------------------------- #
@@ -204,7 +203,6 @@ if __name__ == "__main__":
         pulseFeatures.extend(['momentumDensity', 'pseudoCardiacOutput', 'pseudoStrokeVolume'])
         pulseFeatures.extend(['maxSystolicVelocity', 'valveCrossSectionalArea', 'velocityTimeIntegral', 'velocityTimeIntegralABS', 'velocityTimeIntegral_ALT'])
         pulseFeatures.extend(['centralAugmentationIndex', 'centralAugmentationIndex_EST', 'reflectionIndex', 'stiffensIndex'])
-        sys.exit()
              
         if analyzeFeatures:
             dataProcessing.featureList = np.array(dataProcessing.featureList)
@@ -226,8 +224,10 @@ if __name__ == "__main__":
     
     if analyzeChemical:
         # Create all the Analysis Instances
-        chemicalProcessing = chemicalAnalysis.signalProcessing(startStimulus = 1000, stimulusDuration = 3*60, stimulusBuffer = 6*60, plotData = True)
+        chemicalProcessing = chemicalAnalysis.signalProcessing(startStimulus = 1000, stimulusDuration = 3*60, stimulusBuffer = 500, plotData = True)
         excelDataChemical = excelProcessing.processChemicalData()
+        
+        analyzeTogether = False
         
         featureLabels = []
         for chemicalFile in chemicalFiles:
@@ -247,7 +247,8 @@ if __name__ == "__main__":
                 print("UNSURE OF THE LABEL. STOP CHANGING THE FORMAT ON ME"); sys.exit()
                             
             # Process the Data
-            chemicalProcessing.analyzeChemicals(timePoints, glucose, lactate, uricAcid, featureLabel)
+            if not analyzeTogether or (len(glucose) > 0 and len(lactate) > 0 and len(uricAcid) > 0):
+                chemicalProcessing.analyzeChemicals(timePoints, glucose, lactate, uricAcid, featureLabel, analyzeTogether)
             
             # if chemicalProcessing.continueAnalysis:
             #     fileName = Path(chemicalFile).stem
@@ -269,33 +270,107 @@ if __name__ == "__main__":
         featureLabelsGlucose = np.array(chemicalProcessing.featureLabelsGlucose)
         featureLabelsLactate = np.array(chemicalProcessing.featureLabelsLactate)
         featureLabelsUricAcid = np.array(chemicalProcessing.featureLabelsUricAcid)
+    
+        # featureNames = []
+        # featureNames.extend(['baselineData', 'velocity', 'acceleration', 'thirdDeriv', 'forthDeriv'])
+        
+        # saveDataFolderChemical = "./Output Data/Chemical Data/Pointwise Analysis - all chemicals/"  # Data Folder to Save the Data; MUST END IN '/'
+        # analyzeFeatures = featureAnalysis.featureAnalysis([], [], featureNames, [1110, 1110+60*3], saveDataFolderChemical)
+        # analyzeFeatures.singleFeatureComparison([glucoseFeatures, lactateFeatures, uricAcidFeatures], [featureLabelsGlucose,featureLabelsLactate,featureLabelsUricAcid], ["Glucose", "Lactate", "UricAcid"], featureNames)
+        #sys.exit()
+        
         
         featureNames = []
         # Saving Features from Section: Time Features
-        featureNames.extend(['peakDuration', 'peakRiseDuration', 'peakFallDuration'])
-        featureNames.extend(['velInterval', 'velRiseToPeak', 'velFallToPeak', 'peakDurationRatio'])
-        featureNames.extend(['accelInterval1', 'accelInterval2', 'accelInterval3', 'accelInterval4', 'accelInterval5'])
-        featureNames.extend(['thirdDerivInterval', 'thirdDerivAccelInterval1', 'accelToVelLeft', 'accelToVelRight'])
-        # Saving Features from Section: Slope Features
-        featureNames.extend(['upSlope', 'downSlope', 'velSlope', 'accelEndStimulusSlope', 'thirdDerivEndStimulusSlope'])
-        # Saving Features from Section: Amplitude Features
-        featureNames.extend(['peakAmp', 'velAmp', 'accelAmp'])
-        featureNames.extend(['maxUpSlopeConc', 'maxDownSlopeConc', 'maxUpSlopeVel', 'maxDownSlopeVel', 'maxUpSlopeAccel', 'maxDownSlopeAccel'])
-        featureNames.extend(['maxAccelLeftConc', 'maxAccelRightConc', 'minAccelRightConc', 'maxAccelLeftVel', 'maxAccelRightVel', 'minAccelRightVel', 'maxAccelLeftAccel', 'maxAccelRightAccel', 'minAccelRightAccel'])
-        featureNames.extend(['thirdDerivRightMaxConc', 'thirdDerivRightMinConc', 'thirdDerivRightMaxVel', 'thirdDerivRightMinVel', 'thirdDerivRightVel', 'thirdDerivRightVel'])
-        featureNames.extend(['velDiffConc', 'velDiffVel', 'velDiffAccel'])
-        featureNames.extend(['peakTentX', 'peakTentY', 'tentDeviationX', 'tentDeviationY'])
-        # Saving Features from Section: Under the Curve Features
-        featureNames.extend(['peakArea', 'leftArea', 'rightArea', 'velToVelArea'])  
-        featureNames.extend(['geometricMean', 'peakAverage'])
-#        sys.exit()
+        featureNames.extend(['peakDurationFull', 'peakRiseDuration', 'peakFallDuration', 'peakDurationRatio'])
+        featureNames.extend(['velInterval', 'velRiseToPeak', 'velFallToPeak'])
+        featureNames.extend(['minAccelToPeak', 'minAccelToVelLeft', 'minAccelToVelRight', 'leftAccelInterval', 'rightAccelInterval'])
+        featureNames.extend(['thirdDerivRightInterval', 'thirdDerivLeftInterval'])
         
-        if analyzeFeatures:
-            analyzeFeatures = featureAnalysis.featureAnalysis([], [], featureNames, [1110, 1110+60*3], saveDataFolderChemical)
-            analyzeFeatures.singleFeatureComparison([glucoseFeatures, lactateFeatures, uricAcidFeatures], [featureLabelsGlucose,featureLabelsLactate,featureLabelsUricAcid], ["Glucose", "Lactate", "UricAcid"], featureNames)
-            #analyzeFeatures.featureComparison(glucoseFeatures, uricAcidFeatures, featureLabels, featureNames, 'Glucose', 'Uric Acid')
+        # Saving Features from Section: Amplitude Features
+        featureNames.extend(['peakHeight'])
+        featureNames.extend(['maxUpSlopeConc', 'maxDownSlopeConc', 'maxUpSlopeVel', 'maxDownSlopeVel'])
+        featureNames.extend(['maxAccelLeftConc', 'maxAccelRightConc', 'minAccelRightConc'])
+        featureNames.extend(['maxAccelLeftAccel', 'minAccelLeftAccel', 'maxAccelRightAccel', 'minAccelRightAccel'])
+        featureNames.extend(['velDiffConc', 'accelDiffRightConc'])
+        
+        # Saving Features from Section: Slope Features
+        featureNames.extend(['upSlope', 'downSlope'])
+        
+        # Saving Features from Section: Under the Curve Features
+        featureNames.extend(['leftArea', 'rightArea', 'velToVelArea'])
+        
+        # Saving Features from Section: Peak Shape Features
+        featureNames.extend(['peakTentX', 'peakTentY', 'tentDeviationX', 'tentDeviationY', 'blinkDuration_Final'])
+        featureNames.extend(['peakAverage', 'peakSTD', 'peakSkew', 'peakKurtosis'])
+        
+        saveDataFolderChemical = "./Output Data/Chemical Data/Feature Analysis - normalized - all chemicals with some bad back/"  # Data Folder to Save the Data; MUST END IN '/'
+        analyzeFeatures = featureAnalysis.featureAnalysis([], [], featureNames, [1110, 1110+60*3], saveDataFolderChemical)
+        analyzeFeatures.singleFeatureComparison([glucoseFeatures, lactateFeatures, uricAcidFeatures], [featureLabelsGlucose,featureLabelsLactate,featureLabelsUricAcid], ["Glucose", "Lactate", "UricAcid"], featureNames)
+            
+        
+        import matplotlib.pyplot as plt
+        colorList = ['k', 'r', 'b']
+        labels = [featureLabelsGlucose, featureLabelsLactate, featureLabelsUricAcid]
+        for i, key in enumerate(["Glucose", "Lactate", "Uric Acid"]):
+            for dataInd, data in enumerate(chemicalProcessing.peakData[key]):
+                scaleData1 = 1/max(data[1])
+                plt.plot(data[0], scaleData1*data[1], colorList[labels[i][dataInd]])
+            plt.show()
+        
+       # sys.exit()
+        
+        if analyzeTogether:
+            # Machine Learning File/Model Paths + Titles
+            modelPath = "./Helper Files/Machine Learning Modules/Models/chemicalModel_RF.pkl"
+            modelType = "RF"  # Machine Learning Options: NN, RF, LR, KNN, SVM
+            machineLearningClasses = ["Cold", "Exercise", "VR"]
+            # Specify if We Are Saving the Model
+            saveModel = False
+            saveDataFolder = saveDataFolderChemical + "Machine Learning/" + modelType + "/"
+    
+            signalLabels = featureLabelsGlucose
+            signalData = np.concatenate((glucoseFeatures, lactateFeatures, uricAcidFeatures), 1); 
+            featureLabels = []
+            for i, chemical in enumerate(["Glucose", "Lactate", "Uric Acid"]):
+                for name in featureNames:
+                    featureLabels.append(name + "_" + chemical)
+            signalData = np.array(signalData); signalLabels = np.array(signalLabels); featureLabels = np.array(featureLabels)
+                        
+            # Get the Machine Learning Module
+            performMachineLearning = machineLearningMain.predictionModelHead(modelType, modelPath, numFeatures = len(featureLabels), machineLearningClasses = machineLearningClasses, saveDataFolder = saveDataFolder)
+            predictionModel = performMachineLearning.predictionModel
+            # Train the Data on the Gestures
+            performMachineLearning.trainModel(signalData, signalLabels, featureLabels)     
+        
+        
+        
         
         sys.exit()
+        
+        if analyzeFeatures:
+            if analyzeTogether:
+                saveDataFolderChemical = "./Output Data/Chemical Data/Feature Data Together/"  # Data Folder to Save the Data; MUST END IN '/'
+            else:
+                saveDataFolderChemical = "./Output Data/Chemical Data/Feature Data Singles/"  # Data Folder to Save the Data; MUST END IN '/'
+            
+            saveDataFolderChemical = "./Output Data/Chemical Data/Pointwise Analysis/"  # Data Folder to Save the Data; MUST END IN '/'
+            analyzeFeatures = featureAnalysis.featureAnalysis([], [], featureNames, [1110, 1110+60*3], saveDataFolderChemical)
+            analyzeFeatures.singleFeatureComparison([glucoseFeatures, lactateFeatures, uricAcidFeatures], [featureLabelsGlucose,featureLabelsLactate,featureLabelsUricAcid], ["Glucose", "Lactate", "UricAcid"], featureNames)
+            
+            if analyzeTogether:
+                analyzeFeatures.featureComparison(lactateFeatures, lactateFeatures, featureLabelsGlucose, featureNames, 'Lactate', 'Lactate')
+                analyzeFeatures.featureComparison(uricAcidFeatures, uricAcidFeatures, featureLabelsGlucose, featureNames, 'Glucose', 'Glucose')
+                analyzeFeatures.featureComparison(glucoseFeatures, glucoseFeatures, featureLabelsGlucose, featureNames, 'Uric Acid', 'Uric Acid')
+                analyzeFeatures.featureComparison(lactateFeatures, uricAcidFeatures, featureLabelsGlucose, featureNames, 'Lactate', 'Uric Acid')
+                analyzeFeatures.featureComparison(glucoseFeatures, uricAcidFeatures, featureLabelsGlucose, featureNames, 'Glucose', 'Uric Acid')
+                analyzeFeatures.featureComparison(lactateFeatures, glucoseFeatures, featureLabelsGlucose, featureNames, 'Lactate', 'Glucose')
+            
+            analyzeFeatures.correlationMatrix(np.concatenate((glucoseFeatures, lactateFeatures, uricAcidFeatures), 0), featureNames)
+        
+        sys.exit()
+        
+        
         
     # ---------------------------------------------------------------------- #
     #                         Analyze GSR Data                               #
@@ -328,22 +403,22 @@ if __name__ == "__main__":
     if trainModel:
         excelDataML = excelProcessing.processMLData()
         # Read in Training Data/Labels
-        signalData = []; signalLabels = []; headerTitles = []
+        signalData = []; signalLabels = []; featureLabels = []
         for MLFile in os.listdir(trainingDataExcelFolder):
             MLFile = trainingDataExcelFolder + MLFile
-            signalData, signalLabels, headerTitles = excelDataML.getData(MLFile, signalData = signalData, signalLabels = signalLabels, testSheetNum = 0)
+            signalData, signalLabels, featureLabels = excelDataML.getData(MLFile, signalData = signalData, signalLabels = signalLabels, testSheetNum = 0)
         signalData = np.array(signalData); signalLabels = np.array(signalLabels)
         # Read in Validation Data/Labels
         Validation_Data = []; Validation_Labels = [];
         for MLFile in os.listdir(validationDataExcelFolder):
             MLFile = validationDataExcelFolder + MLFile
-            Validation_Data, Validation_Labels, headerTitles = excelDataML.getData(MLFile, signalData = Validation_Data, signalLabels = Validation_Labels, testSheetNum = 0)
+            Validation_Data, Validation_Labels, featureLabels = excelDataML.getData(MLFile, signalData = Validation_Data, signalLabels = Validation_Labels, testSheetNum = 0)
         Validation_Data = np.array(Validation_Data); Validation_Labels = np.array(Validation_Labels)
         print("\nCollected Signal Data")
         
         Validation_Data = Validation_Data[:][:,0:6]
         signalData = signalData[:][:,0:6]
-        headerTitles = headerTitles[0:6]
+        featureLabels = featureLabels[0:6]
                     
         # Train the Data on the Gestures
         performMachineLearning.trainModel(signalData, signalLabels, pulseFeatures)
@@ -415,4 +490,31 @@ for i in range(len(dataProcessing.featureList[:,0])):
     plt.plot(dataProcessing.featureList[:,0], dataProcessing.featureList[:,i])
     plt.title(pulseFeatures[i])
     plt.show()
+    
+    
+    
+import matplotlib.pyplot as plt
+a = True
+
+for chemicalFile in chemicalFiles:
+    # Read in the Chemical Data from Excel
+    timePoints, chemicalData = excelDataChemical.getData(chemicalFile, testSheetNum = 0)
+    glucose, lactate, uricAcid = chemicalData # Extract the Specific Chemicals
+    
+    colors = ['k','r', 'b']
+    
+    labels = ['glucose', 'lactate', 'uricAcid']
+    for i in range(3):
+        sp = np.fft.fft(chemicalData[i])
+        freq = np.fft.fftfreq(len(timePoints))
+        if a:
+            plt.plot(freq, abs(sp.conjugate()), colors[i], label=labels[i])
+            if i == 2:
+                a = False
+        else:
+            plt.plot(freq, abs(sp.conjugate()), colors[i])
+        #plt.plot(freq, sp.imag, 'r')
+        plt.xlim(-0.05,0.05); plt.ylim(0,100)
+plt.legend()
+plt.show()
 """
