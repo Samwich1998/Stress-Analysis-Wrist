@@ -478,6 +478,47 @@ class processChemicalData(dataProcessing):
 
 class processMLData(dataProcessing):
     
+    def saveFeatureComparison(self, dataMatrix, rowHeaders, colHeaders, saveDataFolder, saveExcelName, sheetName = "Feature Comparison"):
+        print("Saving the Data")
+        # Create Output File Directory to Save Data: If Not Already Created
+        os.makedirs(saveDataFolder, exist_ok=True)
+        
+        # Create Path to Save the Excel File
+        excelFile = saveDataFolder + saveExcelName
+        
+        # If the File is Not Present: Create it
+        if not os.path.isfile(excelFile):
+            # Make Excel WorkBook
+            WB = xl.Workbook()
+            WB_worksheet = WB.active 
+            WB_worksheet.title = sheetName
+        else:
+            print("Excel File Already Exists. Adding New Sheet to File")
+            WB = xl.load_workbook(excelFile)
+            WB_worksheet = WB.create_sheet(sheetName)
+        
+        # Label First Row
+        headers = [None]; headers.extend(colHeaders)
+        WB_worksheet.append(headers)
+        # Save Data to Worksheet
+        for rowInd in range(len(dataMatrix)):
+            if rowInd < len(rowHeaders):
+                rowHeader = rowHeaders[rowInd]
+            else:
+                rowHeader = None
+            dataRow = [rowHeader]
+            
+            dataRow.extend(dataMatrix[rowInd])
+            # Write the Data to Excel
+            WB_worksheet.append(dataRow)
+        
+        # Add Excel Aesthetics
+        WB_worksheet = self.addExcelAesthetics(WB_worksheet)    
+            
+        # Save as New Excel File
+        WB.save(excelFile)
+        WB.close()
+    
     def getData(self, MLFile, signalData = [], signalLabels = [], testSheetNum = 0, startCollectionCol = 2):
         """
         Extracts Pulse Data from Excel Document (.xlsx). Data can be in any

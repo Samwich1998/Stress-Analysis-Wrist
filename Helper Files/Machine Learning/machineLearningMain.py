@@ -48,6 +48,7 @@ class predictionModelHead:
         self.saveDataFolder = saveDataFolder
         self.machineLearningClasses = machineLearningClasses
         self.numClasses = len(machineLearningClasses)
+        self.testSize = 0.4
         
         # Holder Variables
         self.map2D = []
@@ -82,18 +83,44 @@ class predictionModelHead:
         # Return the Precition Model
         return predictionModel
     
-    def trainModel(self, signalData, signalLabels, featureLabels = []):
+    def scoreClassificationModel(self, signalData, signalLabels):
+        # Extract a list of unique labels
+        possibleClassifications = list(set(signalLabels))
+        classificationScores = []
+        # Taking the Average Score Each Time
+        for _ in range(100):
+            # Train the Model with the Training Data
+            Training_Data, Testing_Data, Training_Labels, Testing_Labels = train_test_split(signalData, signalLabels, test_size = self.testSize, shuffle= True, stratify=signalLabels)
+            self.predictionModel.model.fit(Training_Data, Training_Labels)
+            
+            classAccuracies = []
+            for classification in possibleClassifications:
+                testClassData = Testing_Data[Testing_Labels == classification]
+                testClassLabels = self.predictionModel.model.predict(testClassData)
+                
+                classAccuracy = len(testClassLabels[testClassLabels == classification])/len(testClassLabels)
+                classAccuracies.append(classAccuracy)
+            testClassLabels = self.predictionModel.model.predict(Testing_Data)
+            classAccuracy = len(testClassLabels[testClassLabels == Testing_Labels])/len(testClassLabels)
+            classAccuracies.append(classAccuracy)
+            
+            classificationScores.append(classAccuracies)
+        
+        averageClassAccuracy = np.mean(classificationScores, axis=0)
+        return averageClassAccuracy
+        
+        
+    def trainModel(self, signalData, signalLabels, featureLabels = [], returnScore = False):
         if len(featureLabels) != 0 and not len(featureLabels) == len(signalData[0]):
             print("The Number of Feature Labels Provided Does Not Match the Number of Features")
             print("Removing Feature Labels")
             featureLabels = []
-        print(len(featureLabels))
             
         signalData = np.array(signalData); signalLabels = np.array(signalLabels)
         # Find the Data Distribution
         classDistribution = collections.Counter(signalLabels)
-        print("Class Distribution:", classDistribution)
-        print("Number of Data Points = ", len(classDistribution))
+        # print("Class Distribution:", classDistribution)
+        # print("Number of Data Points = ", len(classDistribution))
         
         if self.modelType in ['RF', 'LR', 'KNN', 'SVM', 'NN']:
             # Train the Model Multiple Times
@@ -101,9 +128,9 @@ class predictionModelHead:
             for _ in range(1):
                 modelScore = []
                 # Taking the Average Score Each Time
-                for _ in range(500):
+                for _ in range(200):
                     # Train the Model with the Training Data
-                    Training_Data, Testing_Data, Training_Labels, Testing_Labels = train_test_split(signalData, signalLabels, test_size=0.3, shuffle= True, stratify=signalLabels)
+                    Training_Data, Testing_Data, Training_Labels, Testing_Labels = train_test_split(signalData, signalLabels, test_size=0.5, shuffle= True, stratify=signalLabels)
                     modelScore.append(self.predictionModel.trainModel(Training_Data, Training_Labels, Testing_Data, Testing_Labels))
                 # Display the Spread of Scores
                 plt.hist(modelScore, 100, facecolor='blue', alpha=0.5)
@@ -112,7 +139,10 @@ class predictionModelHead:
                 means.append(np.round(loce*100, 2))
             # Take the Median Score as the True Score
             meanScore = np.median(means, axis=0)
-            print("Mean Testing Accuracy:", meanScore)
+            if returnScore:
+                print("Mean Testing Accuracy (Return):", meanScore)
+                return meanScore
+            #print("Mean Testing Accuracy:", meanScore)
             # Label Accuracy
             self.accuracyDistributionPlot_Average(signalData, signalLabels, self.machineLearningClasses, "Test")
             self.accuracyDistributionPlot_Average(signalData, signalLabels, self.machineLearningClasses, "Full")
@@ -230,13 +260,13 @@ class predictionModelHead:
         plt.show() # Must be the Last Line
                  
     def accuracyDistributionPlot_Average(self, signalData, signalLabels, machineLearningClasses, analyzeType = "Full", name = "Accuracy Distribution"):
-        numAverage = 500
+        numAverage = 200
         
         accMat = np.zeros((len(machineLearningClasses), len(machineLearningClasses)))
         # Taking the Average Score Each Time
         for roundInd in range(1,numAverage+1):
             # Train the Model with the Training Data
-            Training_Data, Testing_Data, Training_Labels, Testing_Labels = train_test_split(signalData, signalLabels, test_size=0.3, shuffle= True, stratify=signalLabels)
+            Training_Data, Testing_Data, Training_Labels, Testing_Labels = train_test_split(signalData, signalLabels, test_size=0.5, shuffle= True, stratify=signalLabels)
             self.predictionModel.trainModel(Training_Data, Training_Labels, Testing_Data, Testing_Labels)
             
             if analyzeType == "Full":
