@@ -125,7 +125,7 @@ class featureAnalysis:
         fig = ax.get_figure(); fig.savefig(saveDataFolder + "correlationMatrixSortedCull.png", dpi=300)            
         plt.show()
     
-    def featureComparison(self, featureList1, featureList2, featureLabels, featureNames, xChemical, yChemical):
+    def featureComparison(self, featureList1, featureList2, featureLabels, featureNames1, featureNames2, xChemical, yChemical):
         # Create Directory to Save the Figures
         saveDataFolder = self.saveDataFolder + "chemicalFeatureComparison/" + xChemical + " vs " + yChemical + "/"
         os.makedirs(saveDataFolder, exist_ok=True)
@@ -136,11 +136,11 @@ class featureAnalysis:
         colorList = ['ko', 'ro', 'bo']
         labelList = ['Cold', 'Exercise', 'VR']
 
-        for featureInd1 in range(len(featureNames)):
+        for featureInd1 in range(len(featureList1[0])):
             
             features1 = featureList1[:, featureInd1]
             
-            for featureInd2 in range(len(featureNames)):
+            for featureInd2 in range(len(featureList2[0])):
                 features2 = featureList2[:, featureInd2]
                 
                 fig = plt.figure()
@@ -153,14 +153,14 @@ class featureAnalysis:
                     else:
                         plt.plot(features1[ind], features2[ind], colorList[labelInd])
                 
-                plt.xlabel(xChemical + ": " + featureNames[featureInd1])
-                plt.ylabel(yChemical + ": " + featureNames[featureInd2])
+                plt.xlabel(xChemical + ": " + featureNames1[featureInd1])
+                plt.ylabel(yChemical + ": " + featureNames2[featureInd2])
                 plt.title("Feature Comparison")
                 plt.legend()
                 # Save the Figure
-                saveDataFolderFeature1 = saveDataFolder + featureNames[featureInd1] + "/"
+                saveDataFolderFeature1 = saveDataFolder + featureNames1[featureInd1] + "/"
                 os.makedirs(saveDataFolderFeature1, exist_ok=True)
-                fig.savefig(saveDataFolderFeature1 + featureNames[featureInd1] + "_" + featureNames[featureInd2] + ".png", dpi=300, bbox_inches='tight')
+                fig.savefig(saveDataFolderFeature1 + featureNames1[featureInd1] + "_" + featureNames2[featureInd2] + ".png", dpi=300, bbox_inches='tight')
             
                 # Clear the Figure        
                 fig.clear()
@@ -184,7 +184,7 @@ class featureAnalysis:
             saveDataFolderChemical = saveDataFolder + chemicalName + "/"
             os.makedirs(saveDataFolderChemical, exist_ok=True)
             
-            for featureInd in range(len(featureNames)):
+            for featureInd in range(len(featureList[0])):
                 
                 features = featureList[:, featureInd]
                 

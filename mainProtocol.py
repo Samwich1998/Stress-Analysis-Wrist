@@ -51,7 +51,7 @@ if __name__ == "__main__":
     # ---------------------------------------------------------------------- #
     #    User Parameters to Edit (More Complex Edits are Inside the Files)   #
     # ---------------------------------------------------------------------- #    
-   # sys.exit()
+    sys.exit()
     
     # Specify Which Program to Run; All Can be Run in One Scirpt (NOT Simutaneously Yet)
     analyzePulse = False
@@ -288,59 +288,76 @@ if __name__ == "__main__":
         # sys.exit()
         
         
-        featureNames = []
+        glucoseNames = []
         # Saving Features from Section: Time
-        featureNames.extend(['peakFallDuration_Glucose', 'peakDurationRatio_Glucose'])
-        featureNames.extend(['minAccelToPeak_Glucose', 'minAccelToVelLeft_Glucose', 'rightAccelInterval_Glucose', 'thirdDerivLeftInterval_Glucose'])
+        glucoseNames.extend(['peakHeight_Glucose', 'peakDiffLeft_Glucose', 'peakDiffRight_Glucose'])
+        glucoseNames.extend(['velInterval_Glucose', 'velIntervalLeft_Glucose', 'velIntervalRight_Glucose'])
+        glucoseNames.extend(['accelIntervalLeft_Glucose', 'accelIntervalRight_Glucose', 'accelInterval_Glucose', 'thirdDerivInterval_Glucose'])
         # Saving Features from Section: Amplitude Features
-        featureNames.extend(['peakHeight_Glucose', 'maxUpSlopeConc_Glucose', 'maxDownSlopeConc_Glucose', 'maxUpSlopeVel_Glucose'])
-        featureNames.extend(['maxAccelLeftConc_Glucose', 'minAccelLeftConc_Glucose', 'maxAccelRightConc_Glucose', 'minAccelRightConc_Glucose'])
-        featureNames.extend(['maxAccelLeftAccel_Glucose', 'minAccelLeftAccel_Glucose', 'maxAccelRightAccel_Glucose'])
-        featureNames.extend(['velDiffConc_Glucose', 'accelDiffRightConc_Glucose'])
+        glucoseNames.extend(['maxUpSlopeConc_Glucose', 'maxDownSlopeConc_Glucose'])
+        glucoseNames.extend(['maxUpSlopeVel_Glucose', 'maxDownSlopeVel_Glucose'])
+        glucoseNames.extend(['maxAccelLeftIndConc_Glucose', 'minAccelCenterIndConc_Glucose', 'maxAccelRightIndConc_Glucose'])
+        glucoseNames.extend(['maxAccelLeftIndAccel_Glucose', 'minAccelCenterIndAccel_Glucose', 'maxAccelRightIndAccel_Glucose'])
+        glucoseNames.extend(['velDiffConc_Glucose', 'accelDiffMaxConc_Glucose', 'accelDiffRightConc_Glucose', 'accelDiffLeftConc_Glucose'])
+        glucoseNames.extend(['velDiff_Glucose', 'accelDiffMax_Glucose', 'accelDiffRight_Glucose', 'accelDiffLeft_Glucose'])
         # Saving Features from Section: Slope Features
-        featureNames.extend(['upSlope_Glucose', 'downSlope_Glucose'])
+        glucoseNames.extend(['upSlope_Glucose', 'downSlope_Glucose'])
         # Saving Features from Section: Under the Curve Features
-        featureNames.extend(['velToVelArea_Glucose'])
+        glucoseNames.extend(['velToVelArea_Glucose'])
         # Saving Features from Section: Peak Shape Features
-        featureNames.extend(['peakTentY_Glucose', 'tentDeviationY_Glucose'])
-        featureNames.extend(['peakAverageFFT_Glucose', 'peakHeightFFT_Glucose', 'leftVelHeightFFT_Glucose', 'rightVelHeightFFT_Glucose', 'leftVelCurvature_Glucose'])
+        glucoseNames.extend(['peakTentX_Glucose', 'peakTentY_Glucose', 'tentDeviationX_Glucose', 'tentDeviationY_Glucose', 'tentDeviationRatio_Glucose', 'blinkDuration_Final_Glucose'])
+        glucoseNames.extend(['peakAverage_Glucose', 'peakEntropy_Glucose', 'peakSkew_Glucose', 'peakKurtosis_Glucose'])
+        glucoseNames.extend(['peakHeightFFT_Glucose', 'leftVelHeightFFT_Glucose','rightVelHeightFFT_Glucose', 'peakSTD_FFT_Glucose', 'peakEntropyFFT_Glucose'])
+        glucoseNames.extend(['peakCurvature_Glucose', 'leftVelCurvature_Glucose', 'rightVelCurvature_Glucose'])
         
+        lactateNames = []
         # Saving Features from Section: Time Features
-        featureNames.extend(['peakDurationFull_Lactate', 'velRiseToPeak_Lactate', 'velFallToPeak_Lactate'])
-        featureNames.extend(['minAccelToPeak_Lactate', 'minAccelToVelLeft_Lactate'])
+        lactateNames.extend(['peakHeight_Lactate', 'peakDiffLeft_Lactate', 'peakDiffRight_Lactate'])
+        lactateNames.extend(['velInterval_Lactate', 'velIntervalLeft_Lactate', 'velIntervalRight_Lactate'])
+        lactateNames.extend(['accelIntervalLeft_Lactate', 'accelIntervalRight_Lactate', 'accelInterval_Lactate', 'thirdDerivInterval_Lactate'])
         # Saving Features from Section: Amplitude Features
-        featureNames.extend(['peakHeight_Lactate', 'maxUpSlopeConc_Lactate', 'maxUpSlopeVel_Lactate', 'maxDownSlopeVel_Lactate'])
-        featureNames.extend(['maxAccelLeftConc_Lactate', 'minAccelLeftConc_Lactate', 'minAccelRightConc_Lactate'])
-        featureNames.extend(['maxAccelLeftAccel_Lactate', 'minAccelLeftAccel_Lactate', 'maxAccelRightAccel_Lactate', 'minAccelRightAccel_Lactate'])
+        lactateNames.extend(['maxUpSlopeConc_Lactate', 'maxDownSlopeConc_Lactate'])
+        lactateNames.extend(['maxUpSlopeVel_Lactate', 'maxDownSlopeVel_Lactate'])
+        lactateNames.extend(['maxAccelLeftIndConc_Lactate', 'minAccelCenterIndConc_Lactate', 'maxAccelRightIndConc_Lactate'])
+        lactateNames.extend(['maxAccelLeftIndAccel_Lactate', 'minAccelCenterIndAccel_Lactate', 'maxAccelRightIndAccel_Lactate'])
+        lactateNames.extend(['velDiffConc_Lactate', 'accelDiffMaxConc_Lactate', 'accelDiffRightConc_Lactate', 'accelDiffLeftConc_Lactate'])
+        lactateNames.extend(['velDiff_Lactate', 'accelDiffMax_Lactate', 'accelDiffRight_Lactate', 'accelDiffLeft_Lactate'])
+        lactateNames.extend(['leftDiffAmp_Lactate', 'rightDiffAmp_Lactate'])
         # Saving Features from Section: Slope Features
-        featureNames.extend(['upSlope_Lactate', 'downSlope_Lactate'])
+        lactateNames.extend(['upSlope_Lactate', 'downSlope_Lactate'])
+        # Saving Features from Section: Under the Curve Features
+        lactateNames.extend(['velToVelArea_Lactate'])
         # Saving Features from Section: Peak Shape Features
-        featureNames.extend(['peakTentY_Lactate', 'tentDeviationY_Lactate', 'blinkDuration_Final_Lactate'])
-        featureNames.extend(['peakAverage_Lactate', 'peakEntropy_Lactate', 'peakSkew_Lactate'])
-        featureNames.extend(['peakAverageFFT_Lactate', 'peakSTD_FFT_Lactate', 'peakHeightFFT_Lactate', 'leftVelHeightFFT_Lactate'])
-        featureNames.extend(['peakCurvature_Lactate', 'leftVelCurvature_Lactate', 'rightVelCurvature_Lactate'])        
+        lactateNames.extend(['peakTentX_Lactate', 'peakTentY_Lactate', 'tentDeviationX_Lactate', 'tentDeviationY_Lactate', 'tentDeviationRatio_Lactate', 'blinkDuration_Final_Lactate'])
+        lactateNames.extend(['peakAverage_Lactate', 'peakEntropy_Lactate', 'peakSkew_Lactate', 'peakKurtosis_Lactate'])
+        lactateNames.extend(['peakHeightFFT_Lactate', 'leftVelHeightFFT_Lactate','rightVelHeightFFT_Lactate', 'peakSTD_FFT_Lactate', 'peakEntropyFFT_Lactate'])
+        lactateNames.extend(['peakCurvature_Lactate', 'leftVelCurvature_Lactate', 'rightVelCurvature_Lactate'])
         
-        # Saving Features from Section: Time Features
-        featureNames.extend(['peakDurationFull_UricAcid', 'peakRiseDuration_UricAcid'])
-        featureNames.extend(['velInterval_UricAcid', 'velRiseToPeak_UricAcid', 'velFallToPeak_UricAcid'])
-        featureNames.extend(['leftAccelInterval_UricAcid', 'rightAccelInterval_UricAcid'])
-        featureNames.extend(['thirdDerivRightInterval_UricAcid'])
+        uricAcidNames = []
         # Saving Features from Section: Amplitude Features
-        featureNames.extend(['peakHeight_UricAcid'])
-        featureNames.extend(['maxDownSlopeConc_UricAcid', 'maxDownSlopeVel_UricAcid'])
-        featureNames.extend(['maxAccelLeftConc_UricAcid', 'maxAccelRightConc_UricAcid', 'minAccelRightConc_UricAcid'])
-        featureNames.extend(['maxAccelLeftAccel_UricAcid', 'maxAccelRightAccel_UricAcid', 'minAccelRightAccel_UricAcid'])
+        uricAcidNames.extend(['maxUpSlopeConc_UricAcid', 'maxDownSlopeConc_UricAcid'])
+        uricAcidNames.extend(['maxUpSlopeVel_UricAcid', 'maxDownSlopeVel_UricAcid'])
+        uricAcidNames.extend(['maxAccelLeftIndConc_UricAcid', 'minAccelCenterIndConc_UricAcid', 'maxAccelRightIndConc_UricAcid'])
+        uricAcidNames.extend(['velDiffConc_UricAcid', 'accelDiffMaxConc_UricAcid', 'accelDiffRightConc_UricAcid', 'accelDiffLeftConc_UricAcid'])
+        uricAcidNames.extend(['leftDiffAmp_UricAcid', 'rightDiffAmp_UricAcid'])
         # Saving Features from Section: Slope Features
-        featureNames.extend(['upSlope_UricAcid', 'downSlope_UricAcid'])
+        uricAcidNames.extend(['upSlope_UricAcid', 'downSlope_UricAcid'])
+        # Saving Features from Section: Under the Curve Features
+        uricAcidNames.extend(['velToVelArea_UricAcid'])
         # Saving Features from Section: Peak Shape Features
-        featureNames.extend(['tentDeviationX_UricAcid', 'tentDeviationY_UricAcid'])
-        featureNames.extend(['peakSTD_UricAcid', 'peakEntropy_UricAcid', 'peakKurtosis_UricAcid', 'peakEntropyFFT_UricAcid'])
+        uricAcidNames.extend(['peakTentX_UricAcid', 'peakTentY_UricAcid', 'tentDeviationX_UricAcid', 'tentDeviationY_UricAcid', 'tentDeviationRatio_UricAcid', 'blinkDuration_Final_UricAcid'])
+        uricAcidNames.extend(['peakSkew_UricAcid', 'peakKurtosis_UricAcid'])
+        uricAcidNames.extend(['peakHeightFFT_UricAcid', 'leftVelHeightFFT_UricAcid','rightVelHeightFFT_UricAcid'])
         
-        
+        featureNames = []
+        featureNames.extend(glucoseNames)
+        featureNames.extend(lactateNames)
+        featureNames.extend(uricAcidNames)
+
         
         saveDataFolderChemical = "./Output Data/Chemical Data/Feature Analysis - normalized - all chemicals with some bad back/"  # Data Folder to Save the Data; MUST END IN '/'
         analyzeFeatures = featureAnalysis.featureAnalysis([], [], featureNames, [1110, 1110+60*3], saveDataFolderChemical)
-        analyzeFeatures.singleFeatureComparison([glucoseFeatures, lactateFeatures, uricAcidFeatures], [featureLabelsGlucose,featureLabelsLactate,featureLabelsUricAcid], ["Glucose", "Lactate", "UricAcid"], featureNames)
+        analyzeFeatures.singleFeatureComparison([glucoseFeatures, lactateFeatures, uricAcidFeatures], [featureLabelsGlucose, featureLabelsLactate, featureLabelsUricAcid], ["Glucose", "Lactate", "UricAcid"], featureNames)
             
         
         # import matplotlib.pyplot as plt
@@ -353,6 +370,7 @@ if __name__ == "__main__":
         #     plt.show()
         
        # sys.exit()
+      
         
         if analyzeTogether:
             # Machine Learning File/Model Paths + Titles
@@ -375,11 +393,6 @@ if __name__ == "__main__":
             # Get the Machine Learning Module
             performMachineLearning = machineLearningMain.predictionModelHead(modelType, modelPath, numFeatures = len(featureLabels), machineLearningClasses = machineLearningClasses, saveDataFolder = saveDataFolder)
             predictionModel = performMachineLearning.predictionModel
-            # Train the Data on the Gestures
-            performMachineLearning.trainModel(signalData, signalLabels, featureLabels) 
-            performMachineLearning.predictionModel.scoreModel(signalData, signalLabels, returnScore = False)
-            
-            
             
             modelScores_Single0 = []
             modelScores_Single1 = []
@@ -405,7 +418,12 @@ if __name__ == "__main__":
             excelProcessing.processMLData().saveFeatureComparison([modelScores_Single2], [], featureLabels, saveDataFolderChemical, "Single Feature Accuracy.xlsx", sheetName = "Feature Comparison VR")
             excelProcessing.processMLData().saveFeatureComparison([modelScores_SingleTotal], [], featureLabels, saveDataFolderChemical, "Single Feature Accuracy.xlsx", sheetName = "Feature Comparison Total")
             
+            # Train the Data on the Gestures
+            performMachineLearning.trainModel(signalData, signalLabels, featureLabels) 
+            performMachineLearning.predictionModel.scoreModel(signalData, signalLabels)
             
+            
+            sys.exit()
             modelScores = np.zeros((len(featureLabels), len(featureLabels)))
             saveDataFolderChemical = "./Output Data/Chemical Data/Feature Combination/Feature Accuracy/"
             for featureIndRow in range(len(featureLabels)):
@@ -434,12 +452,12 @@ if __name__ == "__main__":
             analyzeFeatures.singleFeatureComparison([glucoseFeatures, lactateFeatures, uricAcidFeatures], [featureLabelsGlucose,featureLabelsLactate,featureLabelsUricAcid], ["Glucose", "Lactate", "UricAcid"], featureNames)
             
             if analyzeTogether:
-                analyzeFeatures.featureComparison(lactateFeatures, lactateFeatures, featureLabelsGlucose, featureNames, 'Lactate', 'Lactate')
-                analyzeFeatures.featureComparison(uricAcidFeatures, uricAcidFeatures, featureLabelsGlucose, featureNames, 'Glucose', 'Glucose')
-                analyzeFeatures.featureComparison(glucoseFeatures, glucoseFeatures, featureLabelsGlucose, featureNames, 'Uric Acid', 'Uric Acid')
-                analyzeFeatures.featureComparison(lactateFeatures, uricAcidFeatures, featureLabelsGlucose, featureNames, 'Lactate', 'Uric Acid')
-                analyzeFeatures.featureComparison(glucoseFeatures, uricAcidFeatures, featureLabelsGlucose, featureNames, 'Glucose', 'Uric Acid')
-                analyzeFeatures.featureComparison(lactateFeatures, glucoseFeatures, featureLabelsGlucose, featureNames, 'Lactate', 'Glucose')
+                analyzeFeatures.featureComparison(lactateFeatures, lactateFeatures, featureLabelsGlucose, lactateNames, lactateNames, 'Lactate', 'Lactate')
+                analyzeFeatures.featureComparison(uricAcidFeatures, uricAcidFeatures, featureLabelsGlucose, glucoseNames, glucoseNames, 'Glucose', 'Glucose')
+                analyzeFeatures.featureComparison(glucoseFeatures, glucoseFeatures, featureLabelsGlucose, uricAcidNames, uricAcidNames, 'Uric Acid', 'Uric Acid')
+                analyzeFeatures.featureComparison(lactateFeatures, uricAcidFeatures, featureLabelsGlucose, lactateNames, uricAcidNames, 'Lactate', 'Uric Acid')
+                analyzeFeatures.featureComparison(glucoseFeatures, uricAcidFeatures, featureLabelsGlucose, glucoseNames, uricAcidNames, 'Glucose', 'Uric Acid')
+                analyzeFeatures.featureComparison(lactateFeatures, glucoseFeatures, featureLabelsGlucose, lactateNames, glucoseNames, 'Lactate', 'Glucose')
             
             analyzeFeatures.correlationMatrix(np.concatenate((glucoseFeatures, lactateFeatures, uricAcidFeatures), 0), featureNames)
         
