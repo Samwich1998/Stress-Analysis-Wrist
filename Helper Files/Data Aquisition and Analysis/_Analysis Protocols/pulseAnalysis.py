@@ -7,8 +7,9 @@ from scipy.stats.mstats import gmean
 # Peak Detection
 import scipy
 import scipy.signal
-# High/Low Pass Filters
+# Filter the Data
 from scipy.signal import butter
+from scipy.signal import savgol_filter
 # Baseline Subtraction
 from BaselineRemoval import BaselineRemoval
 # Gaussian Decomposition
@@ -134,9 +135,11 @@ class signalProcessing:
         self.lowPassCutoff = 20         # Low Pass Filter Cutoff; Used on SEPERATED Pulses
         
         # Systolic and Diastolic References
-        self.systolicPressure0 = None   # The Initial Systolic Pressure -> NOT USED RIGHT NOW
-        self.diastolicPressure0 = None  # The Initial Diastolic Pressure -> NOT USED RIGHT NOW
-        self.diastolicPressure = None   # The Current Diastolic Pressure -> NOT USED RIGHT NOW
+        self.systolicPressure0 = None   # The Calibrated Systolic Pressure
+        self.diastolicPressure0 = None  # The Calibrated Diastolic Pressure
+        self.diastolicPressure = None   # The Current Diastolic Pressure
+        self.calibratedSystolicAmplitude = None    # The Average Amplitude for the Calibrated Systolic/Diastolic Pressure
+        self.calibratedSystolicAmplitudeList = []  # A List of Systolic Amplitudes for the Calibration
         
         # Data Processing Parameters
         self.minGaussianWidth = 10E-5   # THe Minimum Gaussian Width During Guassian Decomposition
@@ -147,7 +150,13 @@ class signalProcessing:
         self.plotSeperation = plotSeperation            # Plot the First Derivative and Labeled Systolic Peak Location (General)
         self.alreadyFilteredData = alreadyFilteredData  # If the Data is Already Filtered and Normalize, Do NOT Filter Again
         
-    
+    def setPressureCalibration(self, systolicPressure0, diastolicPressure0):
+        self.systolicPressure0 = systolicPressure0    # The Calibrated Systolic Pressure
+        self.diastolicPressure0 = diastolicPressure0  # The Calibrated Diastolic Pressure
+        
+    def convertToOddInt(self, x):
+        return 2*math.floor((x+1)/2) - 1
+        
     def seperatePulses(self, time, firstDer):
         # Take First Derivative of Smoothened Data
         systolicPeaks = [];
@@ -200,7 +209,7 @@ class signalProcessing:
 
         # ------------------------- Seperate Pulses ------------------------- #
         # Calculate Derivatives
-        firstDer = np.gradient(signalData, time)
+        firstDer = savgol_filter(signalData, 9, 2, mode='nearest', deriv=1)
         # Take First Derivative of Smoothened Data
         systolicPeaks = self.seperatePulses(time, firstDer)
         
@@ -246,30 +255,46 @@ class signalProcessing:
                 print("Pulse Too Small; THIS SHOULDNT HAPPEN")
                 pulseStartInd = pulseEndInd; continue
             # --------------------------------------------------------------- #
-
-            # --------------------- Isolate Pulse Data ---------------------- #
+            
+            # -------------------#--- Filter the Pulse ---------------------- #
             # Extract Indivisual Pulse Data
             pulseData = signalData[pulseStartInd:pulseEndInd+1]
+            # Filter the pulse, if not already filtered
             if not self.alreadyFilteredData:
+                # Apply Low Pass Filter and then Smoothing Function
                 pulseData = self.butterFilter(pulseData, self.lowPassCutoff, self.samplingFreq, order = 3, filterType = 'low')
+                #pulseData = savgol_filter(pulseData, self.convertToOddInt(len(pulseData)/8), 2, mode='nearest')
+            # --------------------------------------------------------------- #
+
+            # ------------------ PreProcess the Pulse Data ------------------ #
+            # Calculate the Pulse Derivatives
             pulseTime = time[pulseStartInd:pulseEndInd+1] - time[pulseStartInd]
-            pulseVelocity = np.gradient(pulseData, pulseTime)
-            pulseAcceleration = np.gradient(pulseVelocity, pulseTime)
+            pulseVelocity = np.gradient(pulseData, pulseTime, edge_order=2)
+            pulseAcceleration = np.gradient(pulseVelocity, pulseTime, edge_order=2)
+
             # Normalize the Pulse's Baseline to Zero
             normalizedPulse = pulseData.copy()
             if not self.alreadyFilteredData:
                 normalizedPulse = self.normalizePulseBaseline(normalizedPulse, polynomialDegree = 1)
+                
             # Calculate the Diastolic Pressure
             self.diastolicPressure = pulseData[0]
             # Calculate Diastolic and Systolic Reference of the First Pulse
             if not self.diastolicPressure0:
-                self.diastolicPressure0 = pulseData[0]
-                self.systolicPressure0 = self.findNearbyMaximum(signalData, systolicPeaks[pulseNum-1], binarySearchWindow=1, maxPointsSearch=self.maxPointsPerPulse)
+                diastolicPressure0 = pulseData[0]
+                systolicPressure0 = self.findNearbyMaximum(signalData, systolicPeaks[pulseNum-1], binarySearchWindow=1, maxPointsSearch=self.maxPointsPerPulse)
+                self.setPressureCalibration(systolicPressure0, diastolicPressure0)
+                
+            
             # --------------------------------------------------------------- #
             
             # -------------------- Extract Pulse Features ------------------- #
-            # Label Systolic, Tidal Wave, Dicrotic, and Tail Wave Peaks Using Gaussian Decomposition   
-            self.extractPulsePeaks(pulseTime, normalizedPulse, pulseVelocity, pulseAcceleration)
+            if self.calibratedSystolicAmplitude != None:
+                normalizedPulse = self.calibrateAmplitude(normalizedPulse)
+                # Label Systolic, Tidal Wave, Dicrotic, and Tail Wave Peaks Using Gaussian Decomposition   
+                self.extractPulsePeaks(pulseTime, normalizedPulse, pulseVelocity, pulseAcceleration)
+            else:
+                self.calibratedSystolicAmplitudeList.append(max(normalizedPulse))
             # --------------------------------------------------------------- #
             
             # Reste for Next Pulse
@@ -277,30 +302,43 @@ class signalProcessing:
         # ------------------------------------------------------------------- #
         self.timeOffset += time[-1]
         
+        if self.calibratedSystolicAmplitude == None:
+            self.calibratedSystolicAmplitude = np.mean(self.calibratedSystolicAmplitudeList)
+        
         # plt.plot(self.heartRateListAverage, 'k-', linewidth=2)
         # plt.ylim(60, 100)
         # plt.show()
     
+    def calibrateAmplitude(self, normalizedPulse):
+        scaleAmp = (self.systolicPressure0 - self.diastolicPressure0)/self.calibratedSystolicAmplitude
+        return normalizedPulse*scaleAmp
+    
     def extractPulsePeaks(self, pulseTime, normalizedPulse, pulseVelocity, pulseAcceleration):
         
+        thirdDeriv = np.gradient(pulseAcceleration, pulseTime, edge_order=2)
         # ----------------------- Detect Systolic Peak ---------------------- #        
         # Find Systolic Peak
         systolicPeakInd = self.findNearbyMaximum(normalizedPulse, 0, binarySearchWindow = 5, maxPointsSearch = len(pulseTime))
         # Find UpStroke Peaks
-        systolicUpstrokeVelInd = self.findNearbyMaximum(pulseVelocity, 0, binarySearchWindow = 2, maxPointsSearch = len(pulseTime))
-        systolicUpstrokeAccelMaxInd = self.findNearbyMaximum(pulseAcceleration, 0, binarySearchWindow = 2, maxPointsSearch = len(pulseTime))
-        systolicUpstrokeAccelMinInd = self.findNearbyMinimum(pulseAcceleration, systolicUpstrokeAccelMaxInd, binarySearchWindow = 2, maxPointsSearch = len(pulseTime))
+        systolicUpstrokeAccelMaxInd = self.findNearbyMaximum(pulseAcceleration, 0, binarySearchWindow = 1, maxPointsSearch = len(pulseTime))
+        systolicUpstrokeAccelMinInd = self.findNearbyMinimum(pulseAcceleration, systolicUpstrokeAccelMaxInd, binarySearchWindow = 1, maxPointsSearch = len(pulseTime))
+        systolicUpstrokeVelInd = self.findNearbyMaximum(pulseVelocity, systolicUpstrokeAccelMaxInd, binarySearchWindow = 1, maxPointsSearch = systolicUpstrokeAccelMaxInd)
         # ------------------------------------------------------------------- #
                 
         # ---------------------- Detect Tidal Wave Peak --------------------- #        
-        # Find Tidal Peak Extras in Velocity
-        beforeTidalVelMinInd = self.findNearbyMinimum(pulseVelocity, systolicPeakInd, binarySearchWindow = 2, maxPointsSearch = int(len(pulseTime)/2))
-        tidalPeakInd = self.findNearbyMaximum(pulseVelocity, beforeTidalVelMinInd, binarySearchWindow = 2, maxPointsSearch = int(len(pulseTime)/2))
-        afterTidalVelMinInd = self.findNearbyMinimum(pulseVelocity, tidalPeakInd, binarySearchWindow = 2, maxPointsSearch = int(len(pulseTime)/2))
-       
-        # Find Tidal Peak Extras in Acceleration
-        tidalStartInd = self.findNearbyMaximum(pulseAcceleration, tidalPeakInd, binarySearchWindow = -2, maxPointsSearch = int(len(pulseTime)/2))
-        tidalEndInd = self.findNearbyMinimum(pulseAcceleration, tidalPeakInd, binarySearchWindow = 2, maxPointsSearch = int(len(pulseTime)/2))
+        # Find Tidal Peak Beginning
+        beforeTidalVelMinInd = self.findNearbyMinimum(pulseVelocity, systolicPeakInd, binarySearchWindow = 1, maxPointsSearch = int(len(pulseTime)/2))
+        tidalStartInd = self.findNearbyMaximum(pulseAcceleration, beforeTidalVelMinInd, binarySearchWindow = 1, maxPointsSearch = int(len(pulseTime)/2))
+        # Find Tidal Peak Ending
+        afterTidalVelMinInd = self.findNearbyMaximum(pulseAcceleration, tidalStartInd, binarySearchWindow = 1, maxPointsSearch = int(len(pulseTime)/2))
+        tidalEndInd = self.findNearbyMinimum(pulseAcceleration, afterTidalVelMinInd, binarySearchWindow = 1, maxPointsSearch = int(len(pulseTime)/2))
+        afterTidalVelMinInd = self.findNearbyMaximum(thirdDeriv, tidalEndInd, binarySearchWindow = 1, maxPointsSearch = int(len(pulseTime)/2))
+        
+        # Find Tidal Peak
+        tidalPeakInd = self.findNearbyMaximum(pulseVelocity, tidalStartInd, binarySearchWindow = 1, maxPointsSearch = int(len(pulseTime)/2))
+        tidalPeakInd_Temp = self.findNearbyMinimum(thirdDeriv, afterTidalVelMinInd, binarySearchWindow = -1, maxPointsSearch = int(len(pulseTime)/2))
+        if abs(tidalPeakInd - tidalPeakInd_Temp) > 5:
+            tidalPeakInd = min(tidalPeakInd, tidalPeakInd_Temp)
         # ------------------------------------------------------------------- #
         
         # ----------------------  Detect Dicrotic Peak ---------------------- #
@@ -308,37 +346,74 @@ class signalProcessing:
         dicroticPeakInd = self.findNearbyMaximum(normalizedPulse, dicroticNotchInd, binarySearchWindow = 2, maxPointsSearch = int(len(pulseTime)/2))
         
         # Other Extremas Nearby
-        dicroticRiseVelMaxInd = self.findNearbyMaximum(pulseVelocity, dicroticNotchInd, binarySearchWindow = 2, maxPointsSearch = int(len(pulseTime)/2))
-        dicroticFallVelMinInd = self.findNearbyMinimum(pulseVelocity, dicroticRiseVelMaxInd, binarySearchWindow = 2, maxPointsSearch = int(len(pulseTime)/2))
+        dicroticInflectionInd = self.findNearbyMaximum(pulseVelocity, dicroticNotchInd, binarySearchWindow = 2, maxPointsSearch = int(len(pulseTime)/2))
+        dicroticFallVelMinInd = self.findNearbyMinimum(pulseVelocity, dicroticInflectionInd, binarySearchWindow = 2, maxPointsSearch = int(len(pulseTime)/2))
         # ------------------------------------------------------------------- #
+        
+        def plotIt():
+            normalizedPulse1 = normalizedPulse/max(normalizedPulse)
+            pulseVelocity1 = pulseVelocity/ max(pulseVelocity)
+            pulseAcceleration1 = pulseAcceleration/max(pulseAcceleration)
+            thirdDeriv1 = thirdDeriv/max(thirdDeriv)
+            
+            plt.plot(pulseTime, normalizedPulse1, linewidth = 2, color = "black")
+            plt.plot(pulseTime, pulseVelocity1, alpha=0.5)
+            plt.plot(pulseTime, pulseAcceleration1, alpha=0.5)
+            plt.plot(pulseTime, thirdDeriv1, alpha=0.5)
+            #plt.plot(pulseTime, fourthDeriv1, alpha=0.5)
+
+            plt.plot(pulseTime[systolicPeakInd], normalizedPulse1[systolicPeakInd],  'ko')
+            plt.plot(pulseTime[systolicUpstrokeVelInd], normalizedPulse1[systolicUpstrokeVelInd],  'ko')
+            plt.plot(pulseTime[systolicUpstrokeAccelMaxInd], pulseAcceleration1[systolicUpstrokeAccelMaxInd],  'ko')
+            plt.plot(pulseTime[systolicUpstrokeAccelMinInd], pulseAcceleration1[systolicUpstrokeAccelMinInd],  'ko')
+
+            plt.plot(pulseTime[tidalStartInd], normalizedPulse1[tidalStartInd],  'ro')
+            plt.plot(pulseTime[tidalPeakInd], normalizedPulse1[tidalPeakInd],  'ro')
+            plt.plot(pulseTime[tidalEndInd], normalizedPulse1[tidalEndInd],  'ro')
+            
+            plt.plot(pulseTime[beforeTidalVelMinInd], normalizedPulse1[beforeTidalVelMinInd],  'ro')
+            plt.plot(pulseTime[afterTidalVelMinInd], normalizedPulse1[afterTidalVelMinInd],  'ro')
+
+            
+            plt.plot(pulseTime[dicroticNotchInd], normalizedPulse1[dicroticNotchInd],  'bo')
+            plt.plot(pulseTime[dicroticPeakInd], normalizedPulse1[dicroticPeakInd],  'bo')
+            
+            plt.plot(pulseTime[[dicroticInflectionInd, dicroticFallVelMinInd]], normalizedPulse1[[dicroticInflectionInd, dicroticFallVelMinInd]],  'bo')
+            
+            plt.title("Time: " + str(self.timePoint))
+            plt.show()
         
         # ------------------------- Cull Bad Pulses ------------------------- #
         # Check The Order of the Systolic Peaks
         if not systolicUpstrokeAccelMaxInd < systolicUpstrokeVelInd < systolicUpstrokeAccelMinInd < systolicPeakInd:
-            #print("Bad Systolic Sequence. Time = ", self.timePoint);
+            print("\t\tBad Systolic Sequence. Time = ", self.timePoint);
             return None
         # Check The Order of the Tidal Peaks
         elif not beforeTidalVelMinInd < tidalStartInd < tidalPeakInd < tidalEndInd < afterTidalVelMinInd:
-            #print("Bad Tidal Sequence. Time = ", self.timePoint);
+            print("\t\tBad Tidal Sequence. Time = ", self.timePoint);
             return None
         # Check The Order of the Dicrotic Peaks
-        elif not dicroticNotchInd < dicroticRiseVelMaxInd < dicroticPeakInd < dicroticFallVelMinInd:
-            #print("Bad Dicrotic Sequence. Time = ", self.timePoint);
+        elif not dicroticNotchInd < dicroticInflectionInd < dicroticPeakInd < dicroticFallVelMinInd:
+            print("\t\tBad Dicrotic Sequence. Time = ", self.timePoint);
+            return None
+        # Check The Order of the Peaks
+        elif not systolicPeakInd < afterTidalVelMinInd < dicroticFallVelMinInd:
+            print("\t\tBad Peak Sequence. Time = ", self.timePoint);
             return None
             
         # Check If the Dicrotic Peak was Skipped
         if pulseTime[-1]*0.7 < pulseTime[dicroticPeakInd] - pulseTime[systolicUpstrokeAccelMaxInd]:
-            #print("Dicrotic Peak Likely Skipped Over. Time = ", self.timePoint);
+            print("\t\tDicrotic Peak Likely Skipped Over. Time = ", self.timePoint);
             return None
         if 0.2 < pulseTime[afterTidalVelMinInd] - pulseTime[beforeTidalVelMinInd]:
-            #print("Tidal Interval is TOO Large. Time = ", self.timePoint);
+            print("\t\tTidal Interval is TOO Large. Time = ", self.timePoint);
             return None
         # ------------------------------------------------------------------- #
         
         # ----------------------- Feature Extraction ------------------------ #
         allSystolicPeaks = [systolicUpstrokeAccelMaxInd, systolicUpstrokeVelInd, systolicUpstrokeAccelMinInd, systolicPeakInd]
         allTidalPeaks = [beforeTidalVelMinInd, tidalStartInd, tidalPeakInd, tidalEndInd, afterTidalVelMinInd]
-        allDicroticPeaks = [dicroticNotchInd, dicroticRiseVelMaxInd, dicroticPeakInd, dicroticFallVelMinInd]
+        allDicroticPeaks = [dicroticNotchInd, dicroticInflectionInd, dicroticPeakInd, dicroticFallVelMinInd]
         
         # Extract the Pulse Features
         self.extractFeatures(normalizedPulse, pulseTime, pulseVelocity, pulseAcceleration, allSystolicPeaks, allTidalPeaks, allDicroticPeaks)
@@ -379,7 +454,7 @@ class signalProcessing:
             plt.plot(pulseTime[dicroticNotchInd], normalizedPulse1[dicroticNotchInd],  'bo')
             plt.plot(pulseTime[dicroticPeakInd], normalizedPulse1[dicroticPeakInd],  'bo')
             
-            plt.plot(pulseTime[[dicroticRiseVelMaxInd, dicroticFallVelMinInd]], normalizedPulse1[[dicroticRiseVelMaxInd, dicroticFallVelMinInd]],  'bo')
+            plt.plot(pulseTime[[dicroticInflectionInd, dicroticFallVelMinInd]], normalizedPulse1[[dicroticInflectionInd, dicroticFallVelMinInd]],  'bo')
             
             plt.title("Time: " + str(self.timePoint))
             plt.show()
@@ -517,7 +592,7 @@ class signalProcessing:
         # Unpack All Peak Inds
         systolicUpstrokeAccelMaxInd, systolicUpstrokeVelInd, systolicUpstrokeAccelMinInd, systolicPeakInd = allSystolicPeaks
         beforeTidalVelMinInd, tidalStartInd, tidalPeakInd, tidalEndInd, afterTidalVelMinInd = allTidalPeaks
-        dicroticNotchInd, dicroticRiseVelMaxInd, dicroticPeakInd, dicroticFallVelMinInd = allDicroticPeaks
+        dicroticNotchInd, dicroticInflectionInd, dicroticPeakInd, dicroticFallVelMinInd = allDicroticPeaks
         
         # Find TimePoints of All Peaks
         systolicUpstrokeAccelMaxTime, systolicUpstrokeVelTime, systolicUpstrokeAccelMinTime, systolicPeakTime = pulseTime[allSystolicPeaks]
@@ -623,16 +698,16 @@ class signalProcessing:
         
         # ----------------------- Biological Features ----------------------- #        
         # Find the Diastolic and Systolic Pressure
-        # diastolicPressure = self.diastolicPressure
-        # systolicPressure = self.diastolicPressure + systolicPeakAmp
-        # pressureRatio = systolicPressure/diastolicPressure
+        diastolicPressure = self.diastolicPressure
+        systolicPressure = self.diastolicPressure + systolicPeakAmp
+        pressureRatio = systolicPressure/diastolicPressure
 
         momentumDensity = 2*pulseTime[-1]*pulseArea
-        # meanArterialBloodPressure = diastolicPressure + systolicPeakAmp/3
+        meanArterialBloodPressure = diastolicPressure + systolicPeakAmp/3
         pseudoCardiacOutput = pulseArea/pulseTime[-1]
-        # pseudoSystemicVascularResistance = meanArterialBloodPressure/pulseTime[-1]
+        pseudoSystemicVascularResistance = meanArterialBloodPressure/pulseTime[-1]
         pseudoStrokeVolume = pseudoCardiacOutput/pulseTime[-1]
-        
+                
         maxSystolicVelocity = max(pulseVelocity)
         valveCrossSectionalArea = pseudoCardiacOutput/maxSystolicVelocity
         velocityTimeIntegral = scipy.integrate.simpson(pulseVelocity, pulseTime)
@@ -682,6 +757,7 @@ class signalProcessing:
 
         # Saving Features from Section: Biological Features
         pulseFeatures.extend([momentumDensity, pseudoCardiacOutput, pseudoStrokeVolume])
+        pulseFeatures.extend([diastolicPressure, systolicPressure, pressureRatio, meanArterialBloodPressure, pseudoSystemicVascularResistance, pseudoStrokeVolume])
         pulseFeatures.extend([maxSystolicVelocity, valveCrossSectionalArea, velocityTimeIntegral, velocityTimeIntegralABS, velocityTimeIntegral_ALT])
         pulseFeatures.extend([centralAugmentationIndex, centralAugmentationIndex_EST, reflectionIndex, stiffensIndex])
 

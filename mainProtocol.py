@@ -51,11 +51,10 @@ if __name__ == "__main__":
     # ---------------------------------------------------------------------- #
     #    User Parameters to Edit (More Complex Edits are Inside the Files)   #
     # ---------------------------------------------------------------------- #    
-    sys.exit()
     
     # Specify Which Program to Run; All Can be Run in One Scirpt (NOT Simutaneously Yet)
-    analyzePulse = False
-    analyzeChemical = True
+    analyzePulse = True
+    analyzeChemical = False
     analyzeGSR = False
     trainModel = False
     # ---------------------------------------------------------------------- #
@@ -66,7 +65,7 @@ if __name__ == "__main__":
         # Specify the Location of the Input Data
         if multipleFiles:
             pulseExcelFiles = []
-            inputFolder = './Input Data/Pulse Data/20220112 CPT/'
+            inputFolder = './Input Data/Pulse Data/20220330 changhao cpt pulse/'
             for file in os.listdir(inputFolder):
                 if file.endswith(("xlsx", "xls")) and not file.startswith(("$", '~')):
                     pulseExcelFiles.append(inputFolder + file)
@@ -87,7 +86,7 @@ if __name__ == "__main__":
         # Saves the Data Analysis: Peak Features for Each Well-Shaped Pulse
         saveInputData = True   
         if saveInputData:
-            saveDataFolder = "./Output Data/Pulse Data/20220112 CPT/"      # Data Folder to Save the Data; MUST END IN '/'
+            saveDataFolder = inputFolder + "Data Analysis/"     # Data Folder to Save the Data; MUST END IN '/'
             sheetName = "Blood Pulse Data"                   # If SheetName Already Exists, Excel Will Add 1 to the end (The Copy Number) 
     # ---------------------------------------------------------------------- #
     # ---------------------------------------------------------------------- #
@@ -162,8 +161,19 @@ if __name__ == "__main__":
             # Plot the Initial Input Data
             # plot.plotData(time, signalData, title = "Input Pulse Data")
             
+            # Calibrate Systolic and Diastolic Pressure
+            fileBasename = os.path.basename(pulseExcelFile)
+            pressureInfo = fileBasename.split("SYS")
+            if len(pressureInfo) > 1:
+                pressureInfo = pressureInfo[-1].split(".")[0]
+                systolicPressure0, diastolicPressure0 = pressureInfo.split("_DIA")
+                dataProcessing.setPressureCalibration(float(systolicPressure0), float(diastolicPressure0))
+            
+            if "cpt" in fileBasename.lower():
+                startStimulus = dataProcessing.timeOffset
+            
             # Seperate Pulses, Perform Indivisual Analysis, nd Extract Features
-            dataProcessing.analyzePulse(time, signalData, minBPM = 30, maxBPM = 180)
+            data = dataProcessing.analyzePulse(time, signalData, minBPM = 30, maxBPM = 180)
             
         # Input Feature Labels
         pulseFeatures = ["timePoint"]
@@ -201,12 +211,13 @@ if __name__ == "__main__":
 
         # Saving Features from Section: Biological Features
         pulseFeatures.extend(['momentumDensity', 'pseudoCardiacOutput', 'pseudoStrokeVolume'])
+        pulseFeatures.extend(['diastolicPressure', 'systolicPressure', 'pressureRatio', 'meanArterialBloodPressure', 'pseudoSystemicVascularResistance', 'pseudoStrokeVolume'])
         pulseFeatures.extend(['maxSystolicVelocity', 'valveCrossSectionalArea', 'velocityTimeIntegral', 'velocityTimeIntegralABS', 'velocityTimeIntegral_ALT'])
         pulseFeatures.extend(['centralAugmentationIndex', 'centralAugmentationIndex_EST', 'reflectionIndex', 'stiffensIndex'])
              
         if analyzeFeatures:
             dataProcessing.featureList = np.array(dataProcessing.featureList)
-            analyzeFeatures = featureAnalysis.featureAnalysis(dataProcessing.featureList[:,0], dataProcessing.featureList[:,1:], pulseFeatures[1:], [1110, 1110+60*3], saveDataFolder)
+            analyzeFeatures = featureAnalysis.featureAnalysis(dataProcessing.featureList[:,0], dataProcessing.featureList[:,1:], pulseFeatures[1:], [startStimulus, startStimulus+60*3], saveDataFolder)
             analyzeFeatures.singleFeatureAnalysis()
         
         sys.exit()
