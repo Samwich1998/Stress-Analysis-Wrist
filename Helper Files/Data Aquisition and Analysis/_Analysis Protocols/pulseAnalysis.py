@@ -164,6 +164,7 @@ class signalProcessing:
         return 2*math.floor((x+1)/2) - 1
         
     def seperatePulses(self, time, firstDer):
+        self.peakStandardInd = 0
         # Take First Derivative of Smoothened Data
         systolicPeaks = [];
         for pointInd in range(len(firstDer)):
@@ -174,7 +175,7 @@ class signalProcessing:
             if firstDerVal > self.peakStandard*0.5:
                 
                 # Use the First Few Peaks as a Standard
-                if 1.5 < time[pointInd] or (self.timeOffset != 0 and self.minPointsPerPulse < pointInd):
+                if (self.timeOffset != 0 or 1.5 < time[pointInd]) and self.minPointsPerPulse < pointInd:
                     # If the Point is Sufficiently Far Away, its a New R-Peak
                     if self.peakStandardInd + self.minPointsPerPulse < pointInd:
                         systolicPeaks.append(pointInd)
@@ -188,6 +189,7 @@ class signalProcessing:
                     self.peakStandard = firstDerVal
                 else:
                     self.peakStandard = max(self.peakStandard, firstDerVal)
+
         return systolicPeaks
         
     
@@ -224,6 +226,10 @@ class signalProcessing:
         firstDer = savgol_filter(signalData, 9, 2, mode='nearest', deriv=1)
         # Take First Derivative of Smoothened Data
         systolicPeaks = self.seperatePulses(time, firstDer)
+        # If no Systolic peaks found, it is likely there was a noise artifact with a high derivative
+        while len(systolicPeaks) == 0:
+            self.peakStandard = self.peakStandard/2;
+            systolicPeaks = self.seperatePulses(time, firstDer)
         
         # If Questioning: Plot to See How the Pulses Seperated
         if self.plotSeperation:
@@ -241,7 +247,6 @@ class signalProcessing:
                     
         # -------------------------- Pulse Analysis ------------------------- #
         print("\tAnalyzing Pulses")
-        self.peakStandardInd = 0 # Reset  from Last File
         # Seperate Peaks Based on the Minimim Before the R-Peak Rise
         pulseStartInd = self.findNearbyMinimum(signalData, systolicPeaks[0], binarySearchWindow=-1, maxPointsSearch=self.maxPointsPerPulse)
         for pulseNum in range(1, len(systolicPeaks)):

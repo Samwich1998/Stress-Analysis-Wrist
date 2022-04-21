@@ -51,7 +51,7 @@ if __name__ == "__main__":
     # ---------------------------------------------------------------------- #
     #    User Parameters to Edit (More Complex Edits are Inside the Files)   #
     # ---------------------------------------------------------------------- #    
-    
+
     # Specify Which Program to Run; All Can be Run in One Scirpt (NOT Simutaneously Yet)
     analyzePulse = True
     analyzeChemical = False
@@ -65,7 +65,7 @@ if __name__ == "__main__":
         # Specify the Location of the Input Data
         if multipleFiles:
             pulseExcelFiles = []
-            inputFolder = './Input Data/Pulse Data/20220330 changhao cpt pulse/'
+            inputFolder = './Input Data/Pulse Data/20220119 changhao VR stress pulse/'
             for file in os.listdir(inputFolder):
                 if file.endswith(("xlsx", "xls")) and not file.startswith(("$", '~')):
                     pulseExcelFiles.append(inputFolder + file)
@@ -146,6 +146,7 @@ if __name__ == "__main__":
     # ---------------------------------------------------------------------- #
 
     if analyzePulse:
+        startStimulus = 0
         # Create all the Pulse Analysis Instances
         plot = pulseAnalysis.plot()
         excelDataPulse = excelProcessing.processPulseData()
@@ -213,8 +214,12 @@ if __name__ == "__main__":
         pulseFeatures.extend(['centralAugmentationIndex', 'centralAugmentationIndex_EST', 'reflectionIndex', 'stiffensIndex'])
              
         if analyzeFeatures:
+            if startStimulus == 0:
+                stimulusTimes = [0, 0]
+            else:
+                stimulusTimes = [startStimulus, startStimulus+60*3]
             dataProcessing.featureList = np.array(dataProcessing.featureList)
-            analyzeFeatures = featureAnalysis.featureAnalysis(dataProcessing.featureList[:,0], dataProcessing.featureList[:,1:], pulseFeatures[1:], [startStimulus, startStimulus+60*3], saveDataFolder)
+            analyzeFeatures = featureAnalysis.featureAnalysis(dataProcessing.featureList[:,0], dataProcessing.featureList[:,1:], pulseFeatures[1:], stimulusTimes, saveDataFolder)
             analyzeFeatures.singleFeatureAnalysis()
         
         # Save Pulse Labels (if Desired)
