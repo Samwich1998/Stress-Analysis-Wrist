@@ -197,7 +197,7 @@ class processPulseData(dataProcessing):
             
             # Add the Features to the Worksheet
             for feature in featureList:
-                WB_worksheet.append(feature)
+                WB_worksheet.append(list(feature))
         
             # Add Excel Aesthetics
             WB_worksheet = self.addExcelAesthetics(WB_worksheet)  
@@ -210,7 +210,7 @@ class processPulseData(dataProcessing):
         WB.save(excelFile)
         WB.close()
     
-    def saveFilteredData(self, bloodPulse, pulseNumSaving, saveDataFolder, saveExcelName, sheetName = "Blood Pulse Data"):
+    def saveFilteredData(self, time, signalData, filteredData, saveDataFolder, saveExcelName, sheetName = "Pulse Data"):
         print("Saving the Data")
         # Create Output File Directory to Save Data: If None Exists
         os.makedirs(saveDataFolder, exist_ok=True)
@@ -231,19 +231,13 @@ class processPulseData(dataProcessing):
             WB_worksheet = WB.create_sheet(sheetName)
         
         # Label First Row
-        header = ["Time", "Capacitance", "Filtered Capacitance"]
+        header = ["Time", "Data", "Filtered Data"]
         WB_worksheet.append(header)
         
         # Save Data to Worksheet
-        for pulseInd in pulseNumSaving:
-            # Get the Data
-            time = bloodPulse[pulseInd]['time']
-            pulseData = bloodPulse[pulseInd]['pulseData']
-            filteredData = bloodPulse[pulseInd]['smoothData']
-            
-            for dataInd in range(len(time)):
-                row = [time[dataInd], pulseData[dataInd], filteredData[dataInd]]
-                WB_worksheet.append(row)
+        for pulseInd in range(len(time)):
+            row = [time[pulseInd], signalData[pulseInd], filteredData[pulseInd]]
+            WB_worksheet.append(row)
         
         # Add Excel Aesthetics
         WB_worksheet = self.addExcelAesthetics(WB_worksheet)  

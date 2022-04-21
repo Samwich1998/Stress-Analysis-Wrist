@@ -150,6 +150,12 @@ class signalProcessing:
         self.plotSeperation = plotSeperation            # Plot the First Derivative and Labeled Systolic Peak Location (General)
         self.alreadyFilteredData = alreadyFilteredData  # If the Data is Already Filtered and Normalize, Do NOT Filter Again
         
+        # Save Each Filtered Pulse
+        self.time = []
+        self.signalData = []
+        self.filteredData = []
+
+        
     def setPressureCalibration(self, systolicPressure0, diastolicPressure0):
         self.systolicPressure0 = systolicPressure0    # The Calibrated Systolic Pressure
         self.diastolicPressure0 = diastolicPressure0  # The Calibrated Diastolic Pressure
@@ -205,6 +211,12 @@ class signalProcessing:
         # Estimate that Defines the Number of Points in a Pulse
         self.minPointsPerPulse = math.floor(self.samplingFreq*60/maxBPM)
         self.maxPointsPerPulse = math.ceil(self.samplingFreq*60/minBPM)
+        
+        # Save the Data
+        previousData = len(self.time)
+        self.time.extend(time + self.timeOffset)
+        self.signalData.extend(signalData)
+        self.filteredData.extend([0]*len(time))
         # ------------------------------------------------------------------- #
 
         # ------------------------- Seperate Pulses ------------------------- #
@@ -263,7 +275,7 @@ class signalProcessing:
             if not self.alreadyFilteredData:
                 # Apply Low Pass Filter and then Smoothing Function
                 pulseData = self.butterFilter(pulseData, self.lowPassCutoff, self.samplingFreq, order = 3, filterType = 'low')
-                #pulseData = savgol_filter(pulseData, self.convertToOddInt(len(pulseData)/8), 2, mode='nearest')
+                pulseData = savgol_filter(pulseData, self.convertToOddInt(len(pulseData)/8), 2, mode='nearest')
             # --------------------------------------------------------------- #
 
             # ------------------ PreProcess the Pulse Data ------------------ #
@@ -281,16 +293,15 @@ class signalProcessing:
             self.diastolicPressure = pulseData[0]
             # Calculate Diastolic and Systolic Reference of the First Pulse
             if not self.diastolicPressure0:
-                diastolicPressure0 = pulseData[0]
+                diastolicPressure0 = self.diastolicPressure
                 systolicPressure0 = self.findNearbyMaximum(signalData, systolicPeaks[pulseNum-1], binarySearchWindow=1, maxPointsSearch=self.maxPointsPerPulse)
                 self.setPressureCalibration(systolicPressure0, diastolicPressure0)
-                
-            
             # --------------------------------------------------------------- #
             
             # -------------------- Extract Pulse Features ------------------- #
             if self.calibratedSystolicAmplitude != None:
                 normalizedPulse = self.calibrateAmplitude(normalizedPulse)
+                self.filteredData[previousData+pulseStartInd:previousData+pulseEndInd+1] = normalizedPulse
                 # Label Systolic, Tidal Wave, Dicrotic, and Tail Wave Peaks Using Gaussian Decomposition   
                 self.extractPulsePeaks(pulseTime, normalizedPulse, pulseVelocity, pulseAcceleration)
             else:

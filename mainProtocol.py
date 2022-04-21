@@ -86,7 +86,7 @@ if __name__ == "__main__":
         # Saves the Data Analysis: Peak Features for Each Well-Shaped Pulse
         saveInputData = True   
         if saveInputData:
-            saveDataFolder = inputFolder + "Data Analysis/"     # Data Folder to Save the Data; MUST END IN '/'
+            saveDataFolder = inputFolder + "Pulse Analysis/"     # Data Folder to Save the Data; MUST END IN '/'
             sheetName = "Blood Pulse Data"                   # If SheetName Already Exists, Excel Will Add 1 to the end (The Copy Number) 
     # ---------------------------------------------------------------------- #
     # ---------------------------------------------------------------------- #
@@ -107,7 +107,7 @@ if __name__ == "__main__":
         saveChemicalData = True
         analyzeFeatures = True
         if saveChemicalData:
-            saveDataFolderChemical = "./Output Data/Chemical Data/Add Smoothing/"  # Data Folder to Save the Data; MUST END IN '/'
+            saveDataFolderChemical = inputFolder + "Chemical Analysis/"     # Data Folder to Save the Data; MUST END IN '/'
     
     # ---------------------------------------------------------------------- #
     # ---------------------------------------------------------------------- #
@@ -120,7 +120,7 @@ if __name__ == "__main__":
         # Save GSR Data
         saveGSRData = False
         if saveGSRData:
-            saveDataFolderGSR = "./Output Data/GSR Data/20210510/"  # Data Folder to Save the Data; MUST END IN '/'
+            saveDataFolderGSR = inputFolder + "GSR Analysis/"     # Data Folder to Save the Data; MUST END IN '/'
     # ---------------------------------------------------------------------- #
     # ---------------------------------------------------------------------- #
     # Machien Learning Parameters
@@ -158,13 +158,10 @@ if __name__ == "__main__":
             if not alreadyFilteredData:
                 signalData = signalData*10**12 # Get Data into pico-Farad
             
-            # Plot the Initial Input Data
-            # plot.plotData(time, signalData, title = "Input Pulse Data")
-            
             # Calibrate Systolic and Diastolic Pressure
             fileBasename = os.path.basename(pulseExcelFile)
             pressureInfo = fileBasename.split("SYS")
-            if len(pressureInfo) > 1:
+            if len(pressureInfo) > 1 and dataProcessing.systolicPressure0 == None:
                 pressureInfo = pressureInfo[-1].split(".")[0]
                 systolicPressure0, diastolicPressure0 = pressureInfo.split("_DIA")
                 dataProcessing.setPressureCalibration(float(systolicPressure0), float(diastolicPressure0))
@@ -173,7 +170,7 @@ if __name__ == "__main__":
                 startStimulus = dataProcessing.timeOffset
             
             # Seperate Pulses, Perform Indivisual Analysis, nd Extract Features
-            data = dataProcessing.analyzePulse(time, signalData, minBPM = 30, maxBPM = 180)
+            pulseData = dataProcessing.analyzePulse(time, signalData, minBPM = 30, maxBPM = 180)
             
         # Input Feature Labels
         pulseFeatures = ["timePoint"]
@@ -220,15 +217,13 @@ if __name__ == "__main__":
             analyzeFeatures = featureAnalysis.featureAnalysis(dataProcessing.featureList[:,0], dataProcessing.featureList[:,1:], pulseFeatures[1:], [startStimulus, startStimulus+60*3], saveDataFolder)
             analyzeFeatures.singleFeatureAnalysis()
         
-        sys.exit()
         # Save Pulse Labels (if Desired)
         if saveInputData:
-            saveExcelName = os.path.basename(pulseExcelFile).split(".")[0] + ".xlsx"
-            excelDataPulse.saveResults(dataProcessing.featureList, pulseFeatures, saveDataFolder, saveExcelName, sheetName)
-            # NOT IMPLEMENTED BELOW
-            # saveExcelName = os.path.basename(pulseExcelFile).split(".")[0] + "_Data.xlsx"
-            # excelDataPulse.saveFilteredData(savingDict, savingPulseInd, saveDataFolder + "Analyzed Data/", saveExcelName, "Filtered Data")
-
+            saveCompiledData = saveDataFolder + "Compiled Data in Excel/"
+            # Save the Features and Filtered Data
+            excelDataPulse.saveResults(dataProcessing.featureList, pulseFeatures, saveCompiledData, "Feature List.xlsx", sheetName)
+            excelDataPulse.saveFilteredData(dataProcessing.time, dataProcessing.signalData, dataProcessing.filteredData, saveCompiledData, "Filtered Data.xlsx", "Filtered Data")
+        
     # ---------------------------------------------------------------------- #
     #                       Analyze Chemical Data                            #
     # ---------------------------------------------------------------------- #
@@ -366,7 +361,6 @@ if __name__ == "__main__":
         featureNames.extend(uricAcidNames)
 
         
-        saveDataFolderChemical = "./Output Data/Chemical Data/Feature Analysis - normalized - all chemicals with some bad back/"  # Data Folder to Save the Data; MUST END IN '/'
         analyzeFeatures = featureAnalysis.featureAnalysis([], [], featureNames, [1110, 1110+60*3], saveDataFolderChemical)
         analyzeFeatures.singleFeatureComparison([glucoseFeatures, lactateFeatures, uricAcidFeatures], [featureLabelsGlucose, featureLabelsLactate, featureLabelsUricAcid], ["Glucose", "Lactate", "UricAcid"], featureNames)
             
@@ -409,7 +403,6 @@ if __name__ == "__main__":
             modelScores_Single1 = []
             modelScores_Single2 = []
             modelScores_SingleTotal = []
-            saveDataFolderChemical = "./Output Data/Chemical Data/Feature Combination/Feature Accuracy/"
             for featureInd in range(len(featureLabels)):
                 featureRow = featureLabels[featureInd]
             
@@ -436,7 +429,6 @@ if __name__ == "__main__":
             
             sys.exit()
             modelScores = np.zeros((len(featureLabels), len(featureLabels)))
-            saveDataFolderChemical = "./Output Data/Chemical Data/Feature Combination/Feature Accuracy/"
             for featureIndRow in range(len(featureLabels)):
                 featureRow = featureLabels[featureIndRow]
                 for featureIndCol in range(len(featureLabels)):
@@ -453,12 +445,6 @@ if __name__ == "__main__":
         sys.exit()
         
         if analyzeFeatures:
-            if analyzeTogether:
-                saveDataFolderChemical = "./Output Data/Chemical Data/Feature Data Together/"  # Data Folder to Save the Data; MUST END IN '/'
-            else:
-                saveDataFolderChemical = "./Output Data/Chemical Data/Feature Data Singles/"  # Data Folder to Save the Data; MUST END IN '/'
-            
-            saveDataFolderChemical = "./Output Data/Chemical Data/Pointwise Analysis/"  # Data Folder to Save the Data; MUST END IN '/'
             analyzeFeatures = featureAnalysis.featureAnalysis([], [], featureNames, [1110, 1110+60*3], saveDataFolderChemical)
             analyzeFeatures.singleFeatureComparison([glucoseFeatures, lactateFeatures, uricAcidFeatures], [featureLabelsGlucose,featureLabelsLactate,featureLabelsUricAcid], ["Glucose", "Lactate", "UricAcid"], featureNames)
             

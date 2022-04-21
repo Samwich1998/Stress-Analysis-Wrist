@@ -9,7 +9,7 @@ Created on Wed Oct 20 18:47:49 2021
 import os
 import numpy as np
 from scipy import stats
-from copy import copy, deepcopy
+from copy import deepcopy
 # Modules for Plotting
 import seaborn as sns
 import matplotlib.pyplot as plt
