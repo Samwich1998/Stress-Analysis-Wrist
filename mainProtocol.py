@@ -65,7 +65,7 @@ if __name__ == "__main__":
         # Specify the Location of the Input Data
         if multipleFiles:
             pulseExcelFiles = []
-            inputFolder = './Input Data/Pulse Data/20220119 changhao VR stress pulse/'
+            inputFolder = './Input Data/Pulse Data/20220330 richard cpt pulse/'
             for file in os.listdir(inputFolder):
                 if file.endswith(("xlsx", "xls")) and not file.startswith(("$", '~')):
                     pulseExcelFiles.append(inputFolder + file)
@@ -177,22 +177,22 @@ if __name__ == "__main__":
         pulseFeatures = ["timePoint"]
         # Saving Features from Section: Extract Data from Peak Inds
         pulseFeatures.extend(['systolicUpstrokeAccelMaxTime', 'systolicUpstrokeVelTime', 'systolicUpstrokeAccelMinTime', 'systolicPeakTime'])
-        pulseFeatures.extend(['beforeTidalVelMinTime', 'tidalStartTime', 'tidalPeakTime', 'tidalEndTime', 'afterTidalVelMinTime'])
+        pulseFeatures.extend(['tidalStartTime', 'tidalPeakTime', 'tidalEndTime'])
         pulseFeatures.extend(['dicroticNotchTime', 'dicroticRiseVelMaxTime', 'dicroticPeakTime', 'dicroticFallVelMinTime'])
         pulseFeatures.extend(['systolicUpstrokeAccelMaxAmp', 'systolicUpstrokeVelAmp', 'systolicUpstrokeAccelMinAmp', 'systolicPeakAmp'])
-        pulseFeatures.extend(['beforeTidalVelMinAmp', 'tidalStartAmp', 'tidalPeakAmp', 'tidalEndAmp', 'afterTidalVelMinAmp'])
+        pulseFeatures.extend(['tidalStartAmp', 'tidalPeakAmp', 'tidalEndAmp'])
         pulseFeatures.extend(['dicroticNotchAmp', 'dicroticRiseVelMaxAmp', 'dicroticPeakAmp', 'dicroticFallVelMinAmp'])
         pulseFeatures.extend(['systolicUpstrokeAccelMaxVel', 'systolicUpstrokeVelVel', 'systolicUpstrokeAccelMinVel', 'systolicPeakVel'])
-        pulseFeatures.extend(['beforeTidalVelMinVel', 'tidalStartVel', 'tidalPeakVel', 'tidalEndVel', 'afterTidalVelMinVel'])
+        pulseFeatures.extend(['tidalStartVel', 'tidalPeakVel', 'tidalEndVel'])
         pulseFeatures.extend(['dicroticNotchVel', 'dicroticRiseVelMaxVel', 'dicroticPeakVel', 'dicroticFallVelMinVel'])
         pulseFeatures.extend(['systolicUpstrokeAccelMaxAccel', 'systolicUpstrokeVelAccel', 'systolicUpstrokeAccelMinAccel', 'systolicPeakAccel'])
-        pulseFeatures.extend(['beforeTidalVelMinAccel', 'tidalStartAccel', 'tidalPeakAccel', 'tidalEndAccel', 'afterTidalVelMinAccel'])
+        pulseFeatures.extend(['tidalStartAccel', 'tidalPeakAccel', 'tidalEndAccel'])
         pulseFeatures.extend(['dicroticNotchAccel', 'dicroticRiseVelMaxAccel', 'dicroticPeakAccel', 'dicroticFallVelMinAccel'])
         
         # Saving Features from Section: Time Features
         pulseFeatures.extend(['pulseDuration', 'systolicTime', 'DiastolicTime', 'leftVentricularPerformance'])
         pulseFeatures.extend(['maxDerivToSystolic', 'systolicToTidal', 'systolicToDicroticNotch', 'dicroticNotchToTidal', 'dicroticNotchToDicrotic'])
-        pulseFeatures.extend(['systolicUpSlopeTime', 'tidalPeakInterval', 'outerTidalInterval', 'midToEndTidal', 'tidalToDicroticVelPeakInterval'])
+        pulseFeatures.extend(['systolicUpSlopeTime', 'tidalPeakInterval', 'midToEndTidal', 'tidalToDicroticVelPeakInterval'])
 
         # Saving Features from Section: Under the Curve Features
         pulseFeatures.extend(['pulseArea', 'pulseAreaSquared', 'leftVentricleLoad', 'diastolicArea'])
@@ -205,7 +205,7 @@ if __name__ == "__main__":
         pulseFeatures.extend(['systolicTidalAccelRatio', 'systolicDicroticAccelRatio', 'dicroticNotchTidalAccelRatio', 'dicroticNotchDicroticAccelRatio'])
 
         # Saving Features from Section: Slope Features
-        pulseFeatures.extend(['systolicSlopeUp', 'SystolicSlopeDown', 'SystolicSlopeDown2', 'tidalSlope', 'DicroticSlopeUp', 'endSlope'])
+        pulseFeatures.extend(['systolicSlopeUp', 'SystolicSlopeDown', 'tidalSlope', 'DicroticSlopeUp', 'endSlope'])
 
         # Saving Features from Section: Biological Features
         pulseFeatures.extend(['momentumDensity', 'pseudoCardiacOutput', 'pseudoStrokeVolume'])
@@ -214,10 +214,7 @@ if __name__ == "__main__":
         pulseFeatures.extend(['centralAugmentationIndex', 'centralAugmentationIndex_EST', 'reflectionIndex', 'stiffensIndex'])
              
         if analyzeFeatures:
-            if startStimulus == 0:
-                stimulusTimes = [0, 0]
-            else:
-                stimulusTimes = [startStimulus, startStimulus+60*3]
+            stimulusTimes = [startStimulus, startStimulus+60*3]
             dataProcessing.featureList = np.array(dataProcessing.featureList)
             analyzeFeatures = featureAnalysis.featureAnalysis(dataProcessing.featureList[:,0], dataProcessing.featureList[:,1:], pulseFeatures[1:], stimulusTimes, saveDataFolder)
             analyzeFeatures.singleFeatureAnalysis()
@@ -520,7 +517,7 @@ if __name__ == "__main__":
         # Save Signals and Labels
         if False and performMachineLearning.map2D:
             saveInputs = excelProcessing.saveExcel()
-            saveExcelNameMap = Path(saveExcelName).stem + "_mapedData.xlsx" #"Signal Features with Predicted and True Labels New.xlsx"
+            saveExcelNameMap = "mapedData.xlsx" #"Signal Features with Predicted and True Labels New.xlsx"
             saveInputs.saveLabeledPoints(performMachineLearning.map2D, signalLabels,  performMachineLearning.predictionModel.predictData(signalData), saveDataFolder, saveExcelNameMap, sheetName = "Signal Data and Labels")
         # Save the Neural Network (The Weights of Each Edge)
         if saveModel:
