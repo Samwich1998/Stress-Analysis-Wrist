@@ -246,8 +246,32 @@ class processPulseData(dataProcessing):
         WB.save(excelFile)
         WB.close()
             
+        
+    def extractFeatures(self, pulseFeaturesFile, prependedString):
+        # Check if File Exists
+        if not os.path.exists(pulseFeaturesFile):
+            print("The following Input File Does Not Exist:", pulseFeaturesFile)
+            sys.exit()
 
-    
+        # Get the Data
+        fullText = ''
+        with open(pulseFeaturesFile, "r", newline='\n') as inputData:
+            inReader = csv.reader(inputData)
+            for row in inReader:
+                fullText += row[0]
+        
+        possibleFeatures = fullText.split(prependedString)
+        # Extract the Features
+        featureList = []
+        for feature in possibleFeatures:
+            feature = feature.split("[")[-1]
+            feature = feature.split("]")[0]
+            feature = feature.replace(" ", "")
+            feature = feature.split(",")
+            if len(feature) != 0:
+                featureList.extend(feature)
+        
+        return featureList
     
 class processGSRData(dataProcessing):
     

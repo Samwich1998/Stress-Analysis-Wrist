@@ -65,7 +65,7 @@ if __name__ == "__main__":
         # Specify the Location of the Input Data
         if multipleFiles:
             pulseExcelFiles = []
-            inputFolder = './Input Data/Pulse Data/20220330 richard cpt pulse/'
+            inputFolder = './Input Data/Pulse Data/20220119 changhao VR stress pulse/'
             for file in os.listdir(inputFolder):
                 if file.endswith(("xlsx", "xls")) and not file.startswith(("$", '~')):
                     pulseExcelFiles.append(inputFolder + file)
@@ -167,52 +167,16 @@ if __name__ == "__main__":
                 systolicPressure0, diastolicPressure0 = pressureInfo.split("_DIA")
                 dataProcessing.setPressureCalibration(float(systolicPressure0), float(diastolicPressure0))
             
-            if "cpt" in fileBasename.lower():
+            if fileBasename.lower() in ["cpt", "exercise start"]:
                 startStimulus = dataProcessing.timeOffset
             
             # Seperate Pulses, Perform Indivisual Analysis, nd Extract Features
             pulseData = dataProcessing.analyzePulse(time, signalData, minBPM = 30, maxBPM = 180)
             
         # Input Feature Labels
-        pulseFeatures = ["timePoint"]
-        # Saving Features from Section: Extract Data from Peak Inds
-        pulseFeatures.extend(['systolicUpstrokeAccelMaxTime', 'systolicUpstrokeVelTime', 'systolicUpstrokeAccelMinTime', 'systolicPeakTime'])
-        pulseFeatures.extend(['tidalStartTime', 'tidalPeakTime', 'tidalEndTime'])
-        pulseFeatures.extend(['dicroticNotchTime', 'dicroticRiseVelMaxTime', 'dicroticPeakTime', 'dicroticFallVelMinTime'])
-        pulseFeatures.extend(['systolicUpstrokeAccelMaxAmp', 'systolicUpstrokeVelAmp', 'systolicUpstrokeAccelMinAmp', 'systolicPeakAmp'])
-        pulseFeatures.extend(['tidalStartAmp', 'tidalPeakAmp', 'tidalEndAmp'])
-        pulseFeatures.extend(['dicroticNotchAmp', 'dicroticRiseVelMaxAmp', 'dicroticPeakAmp', 'dicroticFallVelMinAmp'])
-        pulseFeatures.extend(['systolicUpstrokeAccelMaxVel', 'systolicUpstrokeVelVel', 'systolicUpstrokeAccelMinVel', 'systolicPeakVel'])
-        pulseFeatures.extend(['tidalStartVel', 'tidalPeakVel', 'tidalEndVel'])
-        pulseFeatures.extend(['dicroticNotchVel', 'dicroticRiseVelMaxVel', 'dicroticPeakVel', 'dicroticFallVelMinVel'])
-        pulseFeatures.extend(['systolicUpstrokeAccelMaxAccel', 'systolicUpstrokeVelAccel', 'systolicUpstrokeAccelMinAccel', 'systolicPeakAccel'])
-        pulseFeatures.extend(['tidalStartAccel', 'tidalPeakAccel', 'tidalEndAccel'])
-        pulseFeatures.extend(['dicroticNotchAccel', 'dicroticRiseVelMaxAccel', 'dicroticPeakAccel', 'dicroticFallVelMinAccel'])
+        pulseFeaturesFile = "./Helper Files/Machine Learning/pulseFeatures.txt"
+        pulseFeatures = excelDataPulse.extractFeatures(pulseFeaturesFile, prependedString = "pulseFeatures.extend([")
         
-        # Saving Features from Section: Time Features
-        pulseFeatures.extend(['pulseDuration', 'systolicTime', 'DiastolicTime', 'leftVentricularPerformance'])
-        pulseFeatures.extend(['maxDerivToSystolic', 'systolicToTidal', 'systolicToDicroticNotch', 'dicroticNotchToTidal', 'dicroticNotchToDicrotic'])
-        pulseFeatures.extend(['systolicUpSlopeTime', 'tidalPeakInterval', 'midToEndTidal', 'tidalToDicroticVelPeakInterval'])
-
-        # Saving Features from Section: Under the Curve Features
-        pulseFeatures.extend(['pulseArea', 'pulseAreaSquared', 'leftVentricleLoad', 'diastolicArea'])
-        pulseFeatures.extend(['systolicUpSlopeArea', 'velToTidalArea', 'geometricMean', 'pulseAverage'])
-        
-        # Saving Features from Section: Ratio Features
-        pulseFeatures.extend(['areaRatio', 'systolicDicroticNotchAmpRatio', 'systolicDicroticNotchVelRatio', 'systolicDicroticNotchAccelRatio'])
-        pulseFeatures.extend(['systolicTidalAmpRatio', 'systolicDicroticAmpRatio', 'dicroticNotchTidalAmpRatio', 'dicroticNotchDicroticAmpRatio'])
-        pulseFeatures.extend(['systolicTidalVelRatio', 'systolicDicroticVelRatio', 'dicroticNotchTidalVelRatio', 'dicroticNotchDicroticVelRatio'])
-        pulseFeatures.extend(['systolicTidalAccelRatio', 'systolicDicroticAccelRatio', 'dicroticNotchTidalAccelRatio', 'dicroticNotchDicroticAccelRatio'])
-
-        # Saving Features from Section: Slope Features
-        pulseFeatures.extend(['systolicSlopeUp', 'SystolicSlopeDown', 'tidalSlope', 'DicroticSlopeUp', 'endSlope'])
-
-        # Saving Features from Section: Biological Features
-        pulseFeatures.extend(['momentumDensity', 'pseudoCardiacOutput', 'pseudoStrokeVolume'])
-        pulseFeatures.extend(['diastolicPressure', 'systolicPressure', 'pressureRatio', 'meanArterialBloodPressure', 'pseudoSystemicVascularResistance', 'pseudoStrokeVolume'])
-        pulseFeatures.extend(['maxSystolicVelocity', 'valveCrossSectionalArea', 'velocityTimeIntegral', 'velocityTimeIntegralABS', 'velocityTimeIntegral_ALT'])
-        pulseFeatures.extend(['centralAugmentationIndex', 'centralAugmentationIndex_EST', 'reflectionIndex', 'stiffensIndex'])
-             
         if analyzeFeatures:
             stimulusTimes = [startStimulus, startStimulus+60*3]
             dataProcessing.featureList = np.array(dataProcessing.featureList)

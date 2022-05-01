@@ -132,7 +132,7 @@ class signalProcessing:
         self.peakStandard = 0;          # The Max First Deriviative of the Previous Pulse's Systolic Peak
         self.peakStandardInd = 0        # The Index of the Max Derivative in the Previous Pulse's Systolic Peak
         # Peak Filtering Parameters
-        self.lowPassCutoff = 20         # Low Pass Filter Cutoff; Used on SEPERATED Pulses
+        self.lowPassCutoff = 18         # Low Pass Filter Cutoff; Used on SEPERATED Pulses
         
         # Systolic and Diastolic References
         self.systolicPressure0 = None   # The Calibrated Systolic Pressure
@@ -286,8 +286,8 @@ class signalProcessing:
             # ------------------ PreProcess the Pulse Data ------------------ #
             # Calculate the Pulse Derivatives
             pulseTime = time[pulseStartInd:pulseEndInd+1] - time[pulseStartInd]
-            pulseVelocity = savgol_filter(pulseData, 5, 2, mode='nearest', deriv=1)
-            pulseAcceleration = savgol_filter(pulseData, 5, 2, mode='nearest', deriv=2)
+            pulseVelocity = savgol_filter(pulseData, 3, 2, mode='nearest', deriv=1)
+            pulseAcceleration = savgol_filter(pulseData, 3, 2, mode='nearest', deriv=2)
             thirdDeriv = savgol_filter(pulseAcceleration, 3, 1, mode='nearest', deriv=1)
 
             # Normalize the Pulse's Baseline to Zero
@@ -342,16 +342,14 @@ class signalProcessing:
         # ------------------------------------------------------------------- #
                 
         # ---------------------- Detect Tidal Wave Peak --------------------- #     
-        endBoundaryTidal = self.findNearbyMinimum(normalizedPulse, systolicPeakInd, binarySearchWindow = 3, maxPointsSearch = int(len(pulseTime)/3))
-        bufferToTidal = self.findNearbyMinimum(thirdDeriv, systolicPeakInd-1, binarySearchWindow = 1, maxPointsSearch = endBoundaryTidal-systolicPeakInd)
-        bufferToTidal_Temp = self.findNearbyMinimum(pulseVelocity, systolicPeakInd, binarySearchWindow = 4, maxPointsSearch = endBoundaryTidal-systolicPeakInd)
-        bufferToTidal = min(bufferToTidal, bufferToTidal_Temp)
+        bufferToTidal = self.findNearbyMinimum(thirdDeriv, systolicPeakInd+1, binarySearchWindow = 1, maxPointsSearch = int(len(pulseTime)/2))
         # Find Tidal Peak Beginning
-        tidalStartInd = self.findNearbyMaximum(thirdDeriv, bufferToTidal, binarySearchWindow = 1, maxPointsSearch = endBoundaryTidal-systolicPeakInd)
+        tidalStartInd = self.findNearbyMaximum(thirdDeriv, bufferToTidal+2, binarySearchWindow = 1, maxPointsSearch = int(len(pulseTime)/2))
+        tidalStartInd_OPTION2 = self.findNearbyMaximum(pulseAcceleration, systolicPeakInd, binarySearchWindow = 2, maxPointsSearch = int(len(pulseTime)/2))
         # Find Tidal Peak
-        tidalPeakInd = self.findNearbyMinimum(thirdDeriv, tidalStartInd, binarySearchWindow = 1, maxPointsSearch = endBoundaryTidal-systolicPeakInd)
+        tidalPeakInd = self.findNearbyMinimum(thirdDeriv, min(tidalStartInd_OPTION2, tidalStartInd+1), binarySearchWindow = 4, maxPointsSearch = int(len(pulseTime)/2))
         # Find Tidal Peak Ending
-        tidalEndInd = self.findNearbyMaximum(thirdDeriv, tidalPeakInd, binarySearchWindow = 1, maxPointsSearch = endBoundaryTidal-systolicPeakInd)
+        tidalEndInd = self.findNearbyMaximum(thirdDeriv, tidalPeakInd+1, binarySearchWindow = 2, maxPointsSearch = int(len(pulseTime)/2))
         # ------------------------------------------------------------------- #
         
         # ----------------------  Detect Dicrotic Peak ---------------------- #
@@ -377,11 +375,11 @@ class signalProcessing:
 
             plt.plot(pulseTime[systolicPeakInd], normalizedPulse1[systolicPeakInd],  'ko')
             plt.plot(pulseTime[systolicUpstrokeVelInd], normalizedPulse1[systolicUpstrokeVelInd],  'ko')
-            plt.plot(pulseTime[systolicUpstrokeAccelMaxInd], pulseAcceleration1[systolicUpstrokeAccelMaxInd],  'ko')
-            plt.plot(pulseTime[systolicUpstrokeAccelMinInd], pulseAcceleration1[systolicUpstrokeAccelMinInd],  'ko')
+            plt.plot(pulseTime[systolicUpstrokeAccelMaxInd], normalizedPulse1[systolicUpstrokeAccelMaxInd],  'ko')
+            plt.plot(pulseTime[systolicUpstrokeAccelMinInd], normalizedPulse1[systolicUpstrokeAccelMinInd],  'ko')
 
             plt.plot(pulseTime[tidalStartInd], normalizedPulse1[tidalStartInd],  'ro')
-            plt.plot(pulseTime[tidalPeakInd], normalizedPulse1[tidalPeakInd],  'ro')
+            plt.plot(pulseTime[tidalPeakInd], normalizedPulse1[tidalPeakInd],  'go')
             plt.plot(pulseTime[tidalEndInd], normalizedPulse1[tidalEndInd],  'ro')
             
             plt.plot(pulseTime[dicroticNotchInd], normalizedPulse1[dicroticNotchInd],  'bo')
@@ -391,7 +389,7 @@ class signalProcessing:
             
             plt.title("Time: " + str(self.timePoint) + "; " + badReason)
             plt.show()
-        
+
         # ------------------------- Cull Bad Pulses ------------------------- #
         # Check The Order of the Systolic Peaks
         if not systolicUpstrokeAccelMaxInd < systolicUpstrokeVelInd < systolicUpstrokeAccelMinInd < systolicPeakInd:
@@ -399,7 +397,7 @@ class signalProcessing:
             # plotIt("SYSTOLIC")
             return None
         # Check The Order of the Tidal Peaks
-        elif not tidalStartInd < tidalPeakInd < tidalEndInd:
+        elif not tidalPeakInd < tidalEndInd:
             print("\t\tBad Tidal Sequence. Time = ", self.timePoint); 
             # plotIt("TIDAL")
             return None
@@ -409,20 +407,20 @@ class signalProcessing:
             # plotIt("DICROTIC")
             return None
         # Check The Order of the Peaks
-        elif not systolicPeakInd < tidalPeakInd < dicroticFallVelMinInd:
+        elif not systolicPeakInd < tidalEndInd < dicroticNotchInd - 2:
             print("\t\tBad Peak Sequence. Time = ", self.timePoint); 
             # plotIt("GENERAL")
-            return None 
-            
+            return None
+        
         # Check If the Dicrotic Peak was Skipped
-        if pulseTime[-1]*0.7 < pulseTime[dicroticPeakInd] - pulseTime[systolicUpstrokeAccelMaxInd]:
+        if pulseTime[-1]*0.75 < pulseTime[dicroticPeakInd] - pulseTime[systolicUpstrokeAccelMaxInd]:
             print("\t\tDicrotic Peak Likely Skipped Over. Time = ", self.timePoint);
             return None
         # ------------------------------------------------------------------- #
         
         # ----------------------- Feature Extraction ------------------------ #
         allSystolicPeaks = [systolicUpstrokeAccelMaxInd, systolicUpstrokeVelInd, systolicUpstrokeAccelMinInd, systolicPeakInd]
-        allTidalPeaks = [tidalStartInd, tidalPeakInd, tidalEndInd]
+        allTidalPeaks = [tidalPeakInd, tidalEndInd]
         allDicroticPeaks = [dicroticNotchInd, dicroticInflectionInd, dicroticPeakInd, dicroticFallVelMinInd]
         
         # Extract the Pulse Features
@@ -442,11 +440,12 @@ class signalProcessing:
             normalizedPulse1 = normalizedPulse/max(normalizedPulse)
             pulseVelocity1 = pulseVelocity/ max(pulseVelocity)
             pulseAcceleration1 = pulseAcceleration/max(pulseAcceleration)
-            
+            thirdDeriv1 = thirdDeriv/max(thirdDeriv)
             
             plt.plot(pulseTime, normalizedPulse1, linewidth = 2, color = "black")
             plt.plot(pulseTime, pulseVelocity1, alpha=0.5)
             plt.plot(pulseTime, pulseAcceleration1, alpha=0.5)
+            plt.plot(pulseTime, thirdDeriv1, alpha=0.5)
             
             plt.plot(pulseTime[systolicPeakInd], normalizedPulse1[systolicPeakInd],  'ko')
             plt.plot(pulseTime[systolicUpstrokeVelInd], normalizedPulse1[systolicUpstrokeVelInd],  'ko')
@@ -597,24 +596,24 @@ class signalProcessing:
         # ------------------- Extract Data from Peak Inds ------------------- #        
         # Unpack All Peak Inds
         systolicUpstrokeAccelMaxInd, systolicUpstrokeVelInd, systolicUpstrokeAccelMinInd, systolicPeakInd = allSystolicPeaks
-        tidalStartInd, tidalPeakInd, tidalEndInd = allTidalPeaks
+        tidalPeakInd, tidalEndInd = allTidalPeaks
         dicroticNotchInd, dicroticInflectionInd, dicroticPeakInd, dicroticFallVelMinInd = allDicroticPeaks
         
         # Find TimePoints of All Peaks
         systolicUpstrokeAccelMaxTime, systolicUpstrokeVelTime, systolicUpstrokeAccelMinTime, systolicPeakTime = pulseTime[allSystolicPeaks]
-        tidalStartTime, tidalPeakTime, tidalEndTime = pulseTime[allTidalPeaks]
+        tidalPeakTime, tidalEndTime = pulseTime[allTidalPeaks]
         dicroticNotchTime, dicroticRiseVelMaxTime, dicroticPeakTime, dicroticFallVelMinTime = pulseTime[allDicroticPeaks]
         # Find Amplitude of All Peaks
         systolicUpstrokeAccelMaxAmp, systolicUpstrokeVelAmp, systolicUpstrokeAccelMinAmp, systolicPeakAmp = normalizedPulse[allSystolicPeaks]
-        tidalStartAmp, tidalPeakAmp, tidalEndAmp = normalizedPulse[allTidalPeaks]
+        tidalPeakAmp, tidalEndAmp = normalizedPulse[allTidalPeaks]
         dicroticNotchAmp, dicroticRiseVelMaxAmp, dicroticPeakAmp, dicroticFallVelMinAmp = normalizedPulse[allDicroticPeaks]
         # Find Velocity of All Peaks
         systolicUpstrokeAccelMaxVel, systolicUpstrokeVelVel, systolicUpstrokeAccelMinVel, systolicPeakVel = pulseVelocity[allSystolicPeaks]
-        tidalStartVel, tidalPeakVel, tidalEndVel = pulseVelocity[allTidalPeaks]
+        tidalPeakVel, tidalEndVel = pulseVelocity[allTidalPeaks]
         dicroticNotchVel, dicroticRiseVelMaxVel, dicroticPeakVel, dicroticFallVelMinVel = pulseVelocity[allDicroticPeaks]
         # Find Acceleration of All Peaks
         systolicUpstrokeAccelMaxAccel, systolicUpstrokeVelAccel, systolicUpstrokeAccelMinAccel, systolicPeakAccel = pulseAcceleration[allSystolicPeaks]
-        tidalStartAccel, tidalPeakAccel, tidalEndAccel = pulseAcceleration[allTidalPeaks]
+        tidalPeakAccel, tidalEndAccel = pulseAcceleration[allTidalPeaks]
         dicroticNotchAccel, dicroticRiseVelMaxAccel, dicroticPeakAccel, dicroticFallVelMinAccel = pulseAcceleration[allDicroticPeaks]
         # ------------------------------------------------------------------- #
         
@@ -635,7 +634,6 @@ class signalProcessing:
         
         # General Times
         systolicUpSlopeTime = systolicUpstrokeAccelMinTime - systolicUpstrokeAccelMaxTime
-        tidalPeakInterval = tidalEndTime - tidalStartTime
         midToEndTidal = tidalEndTime - tidalPeakTime
         tidalToDicroticVelPeakInterval = dicroticRiseVelMaxTime - tidalPeakTime
         # ------------------------------------------------------------------- #
@@ -688,7 +686,6 @@ class signalProcessing:
         # -------------------------- Slope Features --------=---------------- #        
         # Systolic Slopes
         systolicSlopeUp = np.polyfit(pulseTime[systolicUpstrokeAccelMaxInd: systolicUpstrokeAccelMinInd], normalizedPulse[systolicUpstrokeAccelMaxInd: systolicUpstrokeAccelMinInd], 1)[0]
-        SystolicSlopeDown = np.polyfit(pulseTime[tidalStartInd:tidalEndInd], normalizedPulse[tidalStartInd:tidalEndInd], 1)[0]
 
         # Tidal Slopes
         tidalSlope = np.polyfit(pulseTime[tidalPeakInd:tidalEndInd], normalizedPulse[tidalPeakInd:tidalEndInd], 1)[0]
@@ -729,22 +726,22 @@ class signalProcessing:
         pulseFeatures = [self.timePoint]
         # Saving Features from Section: Extract Data from Peak Inds
         pulseFeatures.extend([systolicUpstrokeAccelMaxTime, systolicUpstrokeVelTime, systolicUpstrokeAccelMinTime, systolicPeakTime])
-        pulseFeatures.extend([tidalStartTime, tidalPeakTime, tidalEndTime])
+        pulseFeatures.extend([tidalPeakTime, tidalEndTime])
         pulseFeatures.extend([dicroticNotchTime, dicroticRiseVelMaxTime, dicroticPeakTime, dicroticFallVelMinTime])
         pulseFeatures.extend([systolicUpstrokeAccelMaxAmp, systolicUpstrokeVelAmp, systolicUpstrokeAccelMinAmp, systolicPeakAmp])
-        pulseFeatures.extend([tidalStartAmp, tidalPeakAmp, tidalEndAmp])
+        pulseFeatures.extend([tidalPeakAmp, tidalEndAmp])
         pulseFeatures.extend([dicroticNotchAmp, dicroticRiseVelMaxAmp, dicroticPeakAmp, dicroticFallVelMinAmp])
         pulseFeatures.extend([systolicUpstrokeAccelMaxVel, systolicUpstrokeVelVel, systolicUpstrokeAccelMinVel, systolicPeakVel])
-        pulseFeatures.extend([tidalStartVel, tidalPeakVel, tidalEndVel])
+        pulseFeatures.extend([tidalPeakVel, tidalEndVel])
         pulseFeatures.extend([dicroticNotchVel, dicroticRiseVelMaxVel, dicroticPeakVel, dicroticFallVelMinVel])
         pulseFeatures.extend([systolicUpstrokeAccelMaxAccel, systolicUpstrokeVelAccel, systolicUpstrokeAccelMinAccel, systolicPeakAccel])
-        pulseFeatures.extend([tidalStartAccel, tidalPeakAccel, tidalEndAccel])
-        pulseFeatures.extend([dicroticNotchAccel, dicroticRiseVelMaxAccel, dicroticPeakAccel, dicroticFallVelMinAccel])
+        pulseFeatures.extend([tidalPeakAccel, tidalEndAccel])
+        pulseFeatures.extend([dicroticNotchAccel, dicroticRiseVelMaxAccel, dicroticPeakAccel])
         
         # Saving Features from Section: Time Features
         pulseFeatures.extend([pulseDuration, systolicTime, DiastolicTime, leftVentricularPerformance])
         pulseFeatures.extend([maxDerivToSystolic, systolicToTidal, systolicToDicroticNotch, dicroticNotchToTidal, dicroticNotchToDicrotic])
-        pulseFeatures.extend([systolicUpSlopeTime, tidalPeakInterval, midToEndTidal, tidalToDicroticVelPeakInterval])
+        pulseFeatures.extend([systolicUpSlopeTime, midToEndTidal, tidalToDicroticVelPeakInterval])
 
         # Saving Features from Section: Under the Curve Features
         pulseFeatures.extend([pulseArea, pulseAreaSquared, leftVentricleLoad, diastolicArea])
@@ -757,7 +754,7 @@ class signalProcessing:
         pulseFeatures.extend([systolicTidalAccelRatio, systolicDicroticAccelRatio, dicroticNotchTidalAccelRatio, dicroticNotchDicroticAccelRatio])
 
         # Saving Features from Section: Slope Features
-        pulseFeatures.extend([systolicSlopeUp, SystolicSlopeDown, tidalSlope, DicroticSlopeUp, endSlope])
+        pulseFeatures.extend([systolicSlopeUp, tidalSlope, DicroticSlopeUp, endSlope])
 
         # Saving Features from Section: Biological Features
         pulseFeatures.extend([momentumDensity, pseudoCardiacOutput, pseudoStrokeVolume])
@@ -788,7 +785,7 @@ class signalProcessing:
         """
         # Base Case
         if abs(binarySearchWindow) < 1 or maxPointsSearch == 0:
-            return xPointer - 1 + np.argmin(data[max(0,xPointer-1):min(xPointer+2, len(data))]) 
+            return xPointer - min(2, xPointer) + np.argmin(data[max(0,xPointer-2):min(xPointer+3, len(data))]) 
         
         maxHeightPointer = xPointer
         maxHeight = data[xPointer]; searchDirection = binarySearchWindow//abs(binarySearchWindow)
@@ -813,7 +810,7 @@ class signalProcessing:
         # Base Case
         xPointer = min(max(xPointer, 0), len(data)-1)
         if abs(binarySearchWindow) < 1 or maxPointsSearch == 0:
-            return xPointer - 1 + np.argmax(data[max(0,xPointer-1):xPointer+2]) 
+            return xPointer - min(2, xPointer) + np.argmax(data[max(0,xPointer-2):min(xPointer+3, len(data))]) 
         
         minHeightPointer = xPointer; minHeight = data[xPointer];
         searchDirection = binarySearchWindow//abs(binarySearchWindow)
