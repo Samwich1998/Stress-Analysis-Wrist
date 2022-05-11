@@ -25,75 +25,213 @@
     --------------------------------------------------------------------------
 """
 
+# -------------------------------------------------------------------------- #
+# ---------------------------- Imported Modules ---------------------------- #
 
 # Basic Modules
 import os
 import sys
+import shutil
 import numpy as np
 from pathlib import Path
+
 from natsort import natsorted
 # Import Data Extraction Files (And Their Location)
 sys.path.append('./Helper Files/Data Aquisition and Analysis/')  # Folder with All the Helper Files
 import excelProcessing
+
 # Import Analysis Files (And Their Locations)
 sys.path.append('./Helper Files/Data Aquisition and Analysis/_Analysis Protocols')  # Folder with All the Helper Files
 import chemicalAnalysis
 import pulseAnalysis
 import gsrAnalysis
+
 # Import Machine Learning Files (And They Location)
 sys.path.append("Helper Files/Machine Learning/")
-# Import Files for Machine Learning
-import machineLearningMain  # Class Header for All Machine Learning
-import featureAnalysis  # Functions for Feature Analysis
+import machineLearningMain   # Class Header for All Machine Learning
+import featureAnalysis       # Functions for Feature Analysis
 
+# -------------------------------------------------------------------------- #
+# --------------------------- Program Starts Here -------------------------- #
 
 if __name__ == "__main__":
     # ---------------------------------------------------------------------- #
     #    User Parameters to Edit (More Complex Edits are Inside the Files)   #
     # ---------------------------------------------------------------------- #    
 
-    # Specify Which Program to Run; All Can be Run in One Scirpt (NOT Simutaneously Yet)
-    analyzePulse = True
-    analyzeChemical = False
-    analyzeGSR = False
-    trainModel = False
+    # Analysis Parameters
+    reanalyzeData = True
+    saveInputData = True                  # Save the Analyzed Data: The Peak Features for Each Well-Shaped Pulse
+    stimulusTimes = [1000, 1000 + 60*4]   # The [Beginning, End] of the Stimulus in Seconds; Type List.
+    
+    # Specify the Unit of Data for Each 
+    unitOfData_Pulse = "pF"               # Specify the Unit the Data is Represented as: ['F', 'mF', 'uF', 'nF', 'pF', 'fF']
+    unitOfData_Chemical = "uF"            # Specify the Unit the Data is Represented as: ['F', 'mF', 'uF', 'nF', 'pF', 'fF']
+
+    # Specify the Location of the Subject Files
+    dataFolderWithSubjects = './Input Data/All Data/Cleaned data for ML/'  # Path to ALL the Subject Data. The Path Must End with '/'
+
+    # Specify the Stressors/Sensoirs Used in this Experiment
+    listOfStressors = ['cpt', 'exercise', 'vr']
+    listOfSensors = ['pulse', 'enzym', 'gsr', 'temp']
     # ---------------------------------------------------------------------- #
+    # ------------------------- Preparation Steps -------------------------- #
+
+    # Create Instance of Excel Processing Methods
+    excelDataGSR = excelProcessing.processGSRData()
+    excelDataPulse = excelProcessing.processPulseData()
+    excelDataChemical = excelProcessing.processChemicalData()
+    
+    # Create Instances of all Analysis Protocols
+    gsrAnalysisProtocol = gsrAnalysis.signalProcessing()
+    pulseAnalysisProtocol = pulseAnalysis.signalProcessing()
+    chemicalAnalysisProtocol = chemicalAnalysis.signalProcessing(stimulusTimes)
+    
+    subjectFolderPaths = []
+    # Extract the Files for from Each Subject
+    for folder in os.listdir(dataFolderWithSubjects):
+        subjectFolder = dataFolderWithSubjects + folder
+        # Check Whether the Path is a Folder (Exclude Cache Folders)
+        if os.path.isdir(subjectFolder) and not folder.startswith(("$", '~', '_')):
+            # Save the Folder's path for Later Analysis
+            subjectFolderPaths.append(subjectFolder)
+    # Sort the Folders for Ease in Debugging
+    subjectFolderPaths = natsorted(subjectFolderPaths)
+
+    # Define Map of Units to Scale Factors
+    scaleFactorMap = {'F': 1, 'mF': 10**-3, 'uF': 10**-6, 'nF': 10**-9, 'pF': 10**-12, 'fF': 10**-15}
+    # Find the Scale Factor for the Data
+    scaleFactor_Pulse = 1/scaleFactorMap[unitOfData_Pulse]
+    scaleFactor_Chemical = 1/scaleFactorMap[unitOfData_Chemical]
+    
     # ---------------------------------------------------------------------- #
-    # Pulse Parameters
-    if analyzePulse:
-        multipleFiles = True
-        # Specify the Location of the Input Data
-        if multipleFiles:
-            pulseExcelFiles = []
-            inputFolder = './Input Data/Pulse Data/20220119 changhao VR stress pulse/'
-            for file in os.listdir(inputFolder):
-                if file.endswith(("xlsx", "xls")) and not file.startswith(("$", '~')):
-                    pulseExcelFiles.append(inputFolder + file)
-            pulseExcelFiles = natsorted(pulseExcelFiles)
-        else:
-            pulseExcelFiles = ["./Input Data/Pulse Data/20220112 CPT/62.xls"] # Path to the Excel Data ('.xls' or '.xlsx')
+    # -------------------- Data Collection and Analysis -------------------- #
+    
+    # Loop Through Each Subject
+    for subjectFolder in subjectFolderPaths:
         
-        # Parameters to Visualize the Pulse Data
-        plotSeperation = False
-        plotGaussFit = False
+        # ------- Organize the Files within Each Stressor and Sensor ------- #
         
-        # If Filtering Twice
-        alreadyFilteredData = False
+        # Organize/Label the Files in the Folder: Pulse, Chemical, GSR, Temp
+        fileMap = [[None for _ in  range(len(listOfSensors))] for _ in range(len(listOfStressors))]
+        featureMap = [[] for _ in range(len(listOfStressors))]
+        # Loop Through Each File and Label the Stressor Analyzed
+        for file in os.listdir(subjectFolder):
+
+            # Find the Type of Stressor in the File
+            for stressorInd, stressor in enumerate(listOfStressors):
+                if stressor in file.lower():
+                
+                    # Find the Type of Sensor the File Used
+                    for sensorInd, sensor in enumerate(listOfSensors):
+                        if sensor in file.lower():
+                            fileMap[stressorInd][sensorInd] = subjectFolder + "/" + file + "/";
+                            break
+                    break
+        fileMap = np.array(fileMap)
         
-        # Plot the Features in Time
-        analyzeFeatures = True
+        # ------------------------- Pulse Analysis ------------------------- #
         
-        # Saves the Data Analysis: Peak Features for Each Well-Shaped Pulse
-        saveInputData = True   
-        if saveInputData:
-            saveDataFolder = inputFolder + "Pulse Analysis/"     # Data Folder to Save the Data; MUST END IN '/'
-            sheetName = "Blood Pulse Data"                   # If SheetName Already Exists, Excel Will Add 1 to the end (The Copy Number) 
+        # Extract the Pulse Features we are Using
+        pulseFeaturesFile = "./Helper Files/Machine Learning/Feature Labels/pulseFeatures.txt"
+        pulseFeaturesFull = excelDataPulse.extractFeatures(pulseFeaturesFile, prependedString = "pulseFeatures.extend([")
+        pulseFeatures = pulseFeaturesFull[1:]
+        
+        # Extract the Pulse Folder Paths in the Map
+        pulseExcelFiles = fileMap[:, listOfSensors.index("pulse")]
+        # Loop Through the Pulse Data for Each Stressor
+        for stressorInd, pulseFolder in enumerate(pulseExcelFiles):
+            
+            if not reanalyzeData:
+                pulseFeatureList = excelDataPulse.getSavedFeatures(pulseFolder + "/Pulse Analysis/Compiled Data in Excel/Feature List.xlsx")
+                pulseFeatureList = pulseFeatureList[:,1:]
+            else:
+                pulseExcelFiles = []
+                # Collect all the Pulse Files for the Stressor
+                for file in os.listdir(pulseFolder):
+                    file = file.decode("utf-8") if type(file) == type(b'') else file
+                    if file.endswith(("xlsx", "xls")) and not file.startswith(("$", '~')):
+                        pulseExcelFiles.append(pulseFolder + file)
+                pulseExcelFiles = natsorted(pulseExcelFiles)
+            
+                # Loop Through Each Pulse File
+                pulseAnalysisProtocol.resetGlobalVariables()
+                for pulseExcelFile in pulseExcelFiles:
+                    
+                    # Read Data from Excel
+                    time, signalData = excelDataPulse.getData(pulseExcelFile, testSheetNum = 0)
+                    signalData = signalData*scaleFactor_Pulse
+                                    
+                    # Calibrate Systolic and Diastolic Pressure
+                    fileBasename = os.path.basename(pulseExcelFile)
+                    pressureInfo = fileBasename.split("SYS")
+                    if len(pressureInfo) > 1 and pulseAnalysisProtocol.systolicPressure0 == None:
+                        pressureInfo = pressureInfo[-1].split(".")[0]
+                        systolicPressure0, diastolicPressure0 = pressureInfo.split("_DIA")
+                        pulseAnalysisProtocol.setPressureCalibration(float(systolicPressure0), float(diastolicPressure0))
+                    
+                    # Check Whether the StartTime is Specified in the File
+                    if fileBasename.lower() in ["cpt", "exercise", "vr", "start"] and not stimulusTimes[0]:
+                        stimulusTimes[0] = pulseAnalysisProtocol.timeOffset
+                    
+                    # Seperate Pulses, Perform Indivisual Analysis, and Extract Features
+                    pulseData = pulseAnalysisProtocol.analyzePulse(time, signalData, minBPM = 30, maxBPM = 180)
+                
+                savePulseDataFolder = pulseFolder + "Pulse Analysis/"    # Data Folder to Save the Data; MUST END IN '/'
+                # Remove Previous Analysis if Present
+                if os.path.isdir(savePulseDataFolder):
+                    shutil.rmtree(savePulseDataFolder)
+                pulseAnalysisProtocol.featureListExact = np.array(pulseAnalysisProtocol.featureListExact)
+                # Save the Features and Filtered Data
+                saveCompiledDataPulse = savePulseDataFolder + "Compiled Data in Excel/"
+                excelDataPulse.saveResults(pulseAnalysisProtocol.featureListExact, pulseFeaturesFull, saveCompiledDataPulse, "Feature List.xlsx", sheetName = "Pulse Data")
+                excelDataPulse.saveFilteredData(pulseAnalysisProtocol.time, pulseAnalysisProtocol.signalData, pulseAnalysisProtocol.filteredData, saveCompiledDataPulse, "Filtered Data.xlsx", "Filtered Data")
+                # Plot the Features in Time
+                plotPulseFeatures = featureAnalysis.featureAnalysis(pulseAnalysisProtocol.featureListExact[:,0], pulseAnalysisProtocol.featureListExact[:,1:], pulseFeaturesFull[1:], stimulusTimes, savePulseDataFolder)
+                plotPulseFeatures.singleFeatureAnalysis()
+                
+                # Compile the Features from the Data
+                pulseFeatureList = np.array(pulseAnalysisProtocol.featureListAverage)[:,1:]
+
+            # Quick Check that All Points Have the Correct Number of Features
+            for feature in pulseFeatureList:
+                assert len(feature) == len(pulseFeatures)
+            
+            # Downsize the Features into One Data Point
+            # ********************************
+        continue
+    sys.exit()
+    
+    
+        # ------------------------ Chemical Analysis ----------------------- #
+    
+    
+    # Collect the File Names, If Using Every File in the Folder
+    if useAllFiles:
+        pulseExcelFiles = []
+        for file in os.listdir(inputFolder):
+            if file.endswith(("xlsx", "xls")) and not file.startswith(("$", '~')):
+                pulseExcelFiles.append(inputFolder + file)
+        pulseExcelFiles = natsorted(pulseExcelFiles)
+    
+    if trainModel or plotPulseFeatures:
+        # Extract the Pulse Features we are Using
+        pulseFeaturesFile = "./Helper Files/Machine Learning/pulseFeatures.txt"
+        pulseFeatures = excelDataPulse.extractFeatures(pulseFeaturesFile, prependedString = "pulseFeatures.extend([")
+    
+    # Saves the Analyzed Data
+    if saveInputData:
+        saveDataFolder = inputFolder + "Pulse Analysis/"    # Data Folder to Save the Data; MUST END IN '/'
+        sheetName = "Blood Pulse Data"                      # If SheetName Already Exists, Excel Will Add 1 to the end (The Copy Number) 
+
+    
+    
     # ---------------------------------------------------------------------- #
     # ---------------------------------------------------------------------- #
     if analyzeChemical:
-        multipleFiles = True
+        useAllFiles = True
         # Specify the Location of the Input Data
-        if multipleFiles:
+        if useAllFiles:
             chemicalFiles = []
             inputFolder = './Input Data/Chemical Data/'
             for file in os.listdir(inputFolder):
@@ -105,7 +243,7 @@ if __name__ == "__main__":
         
         # Save Data
         saveChemicalData = True
-        analyzeFeatures = True
+        plotPulseFeatures = True
         if saveChemicalData:
             saveDataFolderChemical = inputFolder + "Chemical Analysis/"     # Data Folder to Save the Data; MUST END IN '/'
     
@@ -150,7 +288,7 @@ if __name__ == "__main__":
         # Create all the Pulse Analysis Instances
         plot = pulseAnalysis.plot()
         excelDataPulse = excelProcessing.processPulseData()
-        dataProcessing = pulseAnalysis.signalProcessing(alreadyFilteredData, plotGaussFit, plotSeperation)
+        dataProcessing = pulseAnalysis.signalProcessing(alreadyFilteredData, plotPulses, plotSeperation)
         
         # For Each PulseFile, Collect the Data in the Same Instance
         for pulseExcelFile in pulseExcelFiles:
@@ -177,11 +315,11 @@ if __name__ == "__main__":
         pulseFeaturesFile = "./Helper Files/Machine Learning/pulseFeatures.txt"
         pulseFeatures = excelDataPulse.extractFeatures(pulseFeaturesFile, prependedString = "pulseFeatures.extend([")
         
-        if analyzeFeatures:
+        if plotPulseFeatures:
             stimulusTimes = [startStimulus, startStimulus+60*3]
             dataProcessing.featureList = np.array(dataProcessing.featureList)
-            analyzeFeatures = featureAnalysis.featureAnalysis(dataProcessing.featureList[:,0], dataProcessing.featureList[:,1:], pulseFeatures[1:], stimulusTimes, saveDataFolder)
-            analyzeFeatures.singleFeatureAnalysis()
+            plotPulseFeatures = featureAnalysis.featureAnalysis(dataProcessing.featureList[:,0], dataProcessing.featureList[:,1:], pulseFeatures[1:], stimulusTimes, saveDataFolder)
+            plotPulseFeatures.singleFeatureAnalysis()
         
         # Save Pulse Labels (if Desired)
         if saveInputData:
@@ -196,8 +334,7 @@ if __name__ == "__main__":
     
     if analyzeChemical:
         # Create all the Analysis Instances
-        chemicalProcessing = chemicalAnalysis.signalProcessing(startStimulus = 1000, stimulusDuration = 3*60, stimulusBuffer = 500, plotData = True)
-        excelDataChemical = excelProcessing.processChemicalData()
+
         
         analyzeTogether = True
         
@@ -247,15 +384,15 @@ if __name__ == "__main__":
         # featureNames.extend(['baselineData', 'velocity', 'acceleration', 'thirdDeriv', 'forthDeriv'])
         
         # saveDataFolderChemical = "./Output Data/Chemical Data/Pointwise Analysis - all chemicals/"  # Data Folder to Save the Data; MUST END IN '/'
-        # analyzeFeatures = featureAnalysis.featureAnalysis([], [], featureNames, [1110, 1110+60*3], saveDataFolderChemical)
-        # analyzeFeatures.singleFeatureComparison([glucoseFeatures, lactateFeatures, uricAcidFeatures], [featureLabelsGlucose,featureLabelsLactate,featureLabelsUricAcid], ["Glucose", "Lactate", "UricAcid"], featureNames)
+        # plotPulseFeatures = featureAnalysis.featureAnalysis([], [], featureNames, [1110, 1110+60*3], saveDataFolderChemical)
+        # plotPulseFeatures.singleFeatureComparison([glucoseFeatures, lactateFeatures, uricAcidFeatures], [featureLabelsGlucose,featureLabelsLactate,featureLabelsUricAcid], ["Glucose", "Lactate", "UricAcid"], featureNames)
         # if analyzeTogether:
-        #     analyzeFeatures.featureComparison(lactateFeatures, lactateFeatures, featureLabelsGlucose, featureNames, 'Lactate', 'Lactate')
-        #     analyzeFeatures.featureComparison(uricAcidFeatures, uricAcidFeatures, featureLabelsGlucose, featureNames, 'Glucose', 'Glucose')
-        #     analyzeFeatures.featureComparison(glucoseFeatures, glucoseFeatures, featureLabelsGlucose, featureNames, 'Uric Acid', 'Uric Acid')
-        #     analyzeFeatures.featureComparison(lactateFeatures, uricAcidFeatures, featureLabelsGlucose, featureNames, 'Lactate', 'Uric Acid')
-        #     analyzeFeatures.featureComparison(glucoseFeatures, uricAcidFeatures, featureLabelsGlucose, featureNames, 'Glucose', 'Uric Acid')
-        #     analyzeFeatures.featureComparison(lactateFeatures, glucoseFeatures, featureLabelsGlucose, featureNames, 'Lactate', 'Glucose')
+        #     plotPulseFeatures.featureComparison(lactateFeatures, lactateFeatures, featureLabelsGlucose, featureNames, 'Lactate', 'Lactate')
+        #     plotPulseFeatures.featureComparison(uricAcidFeatures, uricAcidFeatures, featureLabelsGlucose, featureNames, 'Glucose', 'Glucose')
+        #     plotPulseFeatures.featureComparison(glucoseFeatures, glucoseFeatures, featureLabelsGlucose, featureNames, 'Uric Acid', 'Uric Acid')
+        #     plotPulseFeatures.featureComparison(lactateFeatures, uricAcidFeatures, featureLabelsGlucose, featureNames, 'Lactate', 'Uric Acid')
+        #     plotPulseFeatures.featureComparison(glucoseFeatures, uricAcidFeatures, featureLabelsGlucose, featureNames, 'Glucose', 'Uric Acid')
+        #     plotPulseFeatures.featureComparison(lactateFeatures, glucoseFeatures, featureLabelsGlucose, featureNames, 'Lactate', 'Glucose')
             
         # sys.exit()
         
@@ -327,8 +464,8 @@ if __name__ == "__main__":
         featureNames.extend(uricAcidNames)
 
         
-        analyzeFeatures = featureAnalysis.featureAnalysis([], [], featureNames, [1110, 1110+60*3], saveDataFolderChemical)
-        analyzeFeatures.singleFeatureComparison([glucoseFeatures, lactateFeatures, uricAcidFeatures], [featureLabelsGlucose, featureLabelsLactate, featureLabelsUricAcid], ["Glucose", "Lactate", "UricAcid"], featureNames)
+        plotPulseFeatures = featureAnalysis.featureAnalysis([], [], featureNames, [1110, 1110+60*3], saveDataFolderChemical)
+        plotPulseFeatures.singleFeatureComparison([glucoseFeatures, lactateFeatures, uricAcidFeatures], [featureLabelsGlucose, featureLabelsLactate, featureLabelsUricAcid], ["Glucose", "Lactate", "UricAcid"], featureNames)
             
         
         # import matplotlib.pyplot as plt
@@ -410,19 +547,19 @@ if __name__ == "__main__":
         
         sys.exit()
         
-        if analyzeFeatures:
-            analyzeFeatures = featureAnalysis.featureAnalysis([], [], featureNames, [1110, 1110+60*3], saveDataFolderChemical)
-            analyzeFeatures.singleFeatureComparison([glucoseFeatures, lactateFeatures, uricAcidFeatures], [featureLabelsGlucose,featureLabelsLactate,featureLabelsUricAcid], ["Glucose", "Lactate", "UricAcid"], featureNames)
+        if plotPulseFeatures:
+            plotPulseFeatures = featureAnalysis.featureAnalysis([], [], featureNames, [1110, 1110+60*3], saveDataFolderChemical)
+            plotPulseFeatures.singleFeatureComparison([glucoseFeatures, lactateFeatures, uricAcidFeatures], [featureLabelsGlucose,featureLabelsLactate,featureLabelsUricAcid], ["Glucose", "Lactate", "UricAcid"], featureNames)
             
             if analyzeTogether:
-                analyzeFeatures.featureComparison(lactateFeatures, lactateFeatures, featureLabelsGlucose, lactateNames, lactateNames, 'Lactate', 'Lactate')
-                analyzeFeatures.featureComparison(uricAcidFeatures, uricAcidFeatures, featureLabelsGlucose, glucoseNames, glucoseNames, 'Glucose', 'Glucose')
-                analyzeFeatures.featureComparison(glucoseFeatures, glucoseFeatures, featureLabelsGlucose, uricAcidNames, uricAcidNames, 'Uric Acid', 'Uric Acid')
-                analyzeFeatures.featureComparison(lactateFeatures, uricAcidFeatures, featureLabelsGlucose, lactateNames, uricAcidNames, 'Lactate', 'Uric Acid')
-                analyzeFeatures.featureComparison(glucoseFeatures, uricAcidFeatures, featureLabelsGlucose, glucoseNames, uricAcidNames, 'Glucose', 'Uric Acid')
-                analyzeFeatures.featureComparison(lactateFeatures, glucoseFeatures, featureLabelsGlucose, lactateNames, glucoseNames, 'Lactate', 'Glucose')
+                plotPulseFeatures.featureComparison(lactateFeatures, lactateFeatures, featureLabelsGlucose, lactateNames, lactateNames, 'Lactate', 'Lactate')
+                plotPulseFeatures.featureComparison(uricAcidFeatures, uricAcidFeatures, featureLabelsGlucose, glucoseNames, glucoseNames, 'Glucose', 'Glucose')
+                plotPulseFeatures.featureComparison(glucoseFeatures, glucoseFeatures, featureLabelsGlucose, uricAcidNames, uricAcidNames, 'Uric Acid', 'Uric Acid')
+                plotPulseFeatures.featureComparison(lactateFeatures, uricAcidFeatures, featureLabelsGlucose, lactateNames, uricAcidNames, 'Lactate', 'Uric Acid')
+                plotPulseFeatures.featureComparison(glucoseFeatures, uricAcidFeatures, featureLabelsGlucose, glucoseNames, uricAcidNames, 'Glucose', 'Uric Acid')
+                plotPulseFeatures.featureComparison(lactateFeatures, glucoseFeatures, featureLabelsGlucose, lactateNames, glucoseNames, 'Lactate', 'Glucose')
             
-            analyzeFeatures.correlationMatrix(np.concatenate((glucoseFeatures, lactateFeatures, uricAcidFeatures), 0), featureNames)
+            plotPulseFeatures.correlationMatrix(np.concatenate((glucoseFeatures, lactateFeatures, uricAcidFeatures), 0), featureNames)
         
         sys.exit()
         
@@ -437,11 +574,7 @@ if __name__ == "__main__":
         excelDataGSR = excelProcessing.processGSRData()
         timeGSR, currentGSR = excelDataGSR.getData(gsrFile, testSheetNum = 0)
         currentGSR = currentGSR*10**6 # Get Data into micro-Ampes
-        
-        # Plot the Initial Input Data
-        plot = gsrAnalysis.plot()
-        plot.plotData(timeGSR, currentGSR, title = "Input GSR Data")
-        
+
         # Process the Data
         gsrProcessing = gsrAnalysis.signalProcessing()
         timeGSR, currentGSR = gsrProcessing.downsizeDataTime(timeGSR, currentGSR, downsizeWindow = windowGSR)

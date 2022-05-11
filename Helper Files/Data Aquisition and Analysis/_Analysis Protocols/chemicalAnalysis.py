@@ -27,7 +27,7 @@ from lmfit.models import SkewedGaussianModel
 
 class signalProcessing:
     
-    def __init__(self, startStimulus, stimulusDuration, stimulusBuffer, plotData = False):
+    def __init__(self, stimulusTimes, stimulusBuffer = 500, plotData = False):
         self.glucoseFeatures = []
         self.lactateFeatures = []
         self.uricAcidFeatures = []
@@ -44,8 +44,8 @@ class signalProcessing:
         
         self.plotData = plotData
         
-        self.startStimulus = startStimulus
-        self.stimulusDuration = stimulusDuration + stimulusBuffer
+        self.startStimulus = stimulusTimes[0]
+        self.endStimulus = stimulusTimes[1] + stimulusBuffer
         
         self.peakData = {"Lactate":[], "Glucose":[], "Uric Acid":[]}
     
@@ -180,8 +180,8 @@ class signalProcessing:
         # Seperate Out the Stimulus Window
         allProminences = allProminences[self.startStimulus < xData[peakIndices]]
         peakIndices = peakIndices[self.startStimulus < xData[peakIndices]]
-        allProminences = allProminences[self.startStimulus + self.stimulusDuration > xData[peakIndices]]
-        peakIndices = peakIndices[self.startStimulus + self.stimulusDuration > xData[peakIndices]]
+        allProminences = allProminences[self.startStimulus + self.endStimulus > xData[peakIndices]]
+        peakIndices = peakIndices[self.startStimulus + self.endStimulus > xData[peakIndices]]
 
         # If Peaks are Found
         if len(peakIndices) > 0:

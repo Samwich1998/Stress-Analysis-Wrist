@@ -20,7 +20,6 @@ import matplotlib.animation as manimation
 # Machine Learning Modules
 from sklearn.manifold import MDS
 from sklearn.preprocessing import MinMaxScaler
-from sklearn.inspection import permutation_importance
 # Neural Network Modules
 from sklearn.model_selection import train_test_split
 # Feature Importance
@@ -28,7 +27,7 @@ import shap
 
 # Import Machine Learning Files
 sys.path.append('./Helper Files/Machine Learning/Classification Methods/')
-sys.path.append('./Classification Methods/') # Folder with Machine Learning Files
+sys.path.append('./Machine Learning/Classification Methods/') # Folder with Machine Learning Files
 import neuralNetwork as NeuralNet       # Functions for Neural Network Algorithm
 import Linear_Regression as LR          # Functions for Linear Regression Algorithm
 import randomForest                     # Functions for the Random Forest Algorithm

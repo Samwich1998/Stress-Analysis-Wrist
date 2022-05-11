@@ -30,9 +30,11 @@ class featureAnalysis:
         
         self.colorList = ['ko', 'r-o', 'bo', 'go', 'mo']
     
-    def singleFeatureAnalysis(self, averageIntervalList = [0.001, 30]):
+    def singleFeatureAnalysis(self, averageIntervalList = [0.001, 30, 60]):
         # Create Directory to Save the Figures
         saveDataFolder = self.saveDataFolder + "singleFeatureAnalysis/"
+        if os.path.isfile(saveDataFolder):
+            os.rmdir(saveDataFolder)
         os.makedirs(saveDataFolder, exist_ok=True)
         
         # Loop Through Each Feature
@@ -60,7 +62,8 @@ class featureAnalysis:
                 plt.plot(self.timePoints, features, self.colorList[ind], markersize=5)
             
             # Specify the Location of the Stimulus
-            plt.vlines(self.stimulusTime, min(features), max(features), 'g', linewidth = 2, zorder=len(averageIntervalList) + 1)
+            if None not in self.stimulusTime:
+                plt.vlines(self.stimulusTime, min(features), max(features), 'g', linewidth = 2, zorder=len(averageIntervalList) + 1)
 
             # Add Figure Labels
             plt.xlabel("Time (Seconds)")

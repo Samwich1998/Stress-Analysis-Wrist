@@ -100,6 +100,43 @@ class dataProcessing:
             cell.font = Font(color='00FF0000', italic=True, bold=True)
         
         return WB_worksheet
+
+    def getSavedFeatures(self, featureExcelFile):
+        # Check if File Exists
+        if not os.path.exists(featureExcelFile):
+            print("The following Input File Does Not Exist:", featureExcelFile)
+            sys.exit()
+
+        print("Extracting Features from the Excel File:", featureExcelFile)
+        # Load Data from the Excel File
+        WB = xl.load_workbook(featureExcelFile, data_only=True, read_only=True)
+        WB_worksheets = WB.worksheets
+        ExcelSheet = WB_worksheets[-1]
+        
+        # If Header Exists, Skip Until You Find the Data
+        for row in ExcelSheet.rows:
+            cellA = row[0]
+            if type(cellA.value) in [float, int]:
+                dataStartRow = cellA.row
+                break
+        
+        features = []
+        # Loop Through the Excel Worksheet to collect all the data
+        for row in ExcelSheet.iter_rows(min_col=1, min_row=dataStartRow, max_row=ExcelSheet.max_row):
+            # SafeGaurd: If User Edits the Document to Create Empty Rows, Stop Reading in Data
+            if row[0].value == None:
+                break
+            
+            newFeatures = []
+            for cell in row:
+                if cell.value == None:
+                    break
+                newFeatures.append(cell.value)
+            features.append(newFeatures)
+            
+        # Finished Data Collection: Close Workbook and Return Data to User
+        WB.close()
+        return np.array(features)
     
 
 class processPulseData(dataProcessing):
@@ -157,13 +194,18 @@ class processPulseData(dataProcessing):
         return np.array(data["time"]), np.array(data["Capacitance"])
 
 
-    def saveResults(self, featureList, featureLabels, saveDataFolder, saveExcelName, sheetName = "Pulse Features"):
+    def saveResults(self, featureList, featureLabels, saveDataFolder, saveExcelName, sheetName = "Pulse Features", overwriteSave = True, dontSaveIfExcelExists = False):
         print("Saving the Data")
         # Create Output File Directory to Save Data: If None Exists
         os.makedirs(saveDataFolder, exist_ok=True)
         
         # Path to File to Save
         excelFile = saveDataFolder + saveExcelName
+        
+        # If You Want to Overwrite the Excel, Remove the File First (Quicker)
+        if overwriteSave and os.path.isfile(excelFile):
+            print("\tDeleting Old Excel Workbook")
+            os.remove(excelFile) 
         
         # If the File is Not Present: Create The Excel File
         if not os.path.isfile(excelFile):
@@ -172,20 +214,14 @@ class processPulseData(dataProcessing):
             WB = xl.Workbook()
             WB_worksheet = WB.active 
             WB_worksheet.title = sheetName
-        else:
-            print("Excel File Already Exists. Adding New Sheet to File")
+        elif not dontSaveIfExcelExists:
+            print("\tExcel File Already Exists. Adding New Sheet to File")
             WB = xl.load_workbook(excelFile, read_only=False)
             WB_worksheet = WB.create_sheet(sheetName)
-        
-        # Label First Row
-        header = ["Pulse Number", "Start Time", "End Time", 'Systolic Time From Start', 'Tidal Wave Time From Systolic', 'Dicrotic Time From Tidal Wave',
-                  'Tail Wave Time From Dicrotic', 'End Time From Tail Wave', 'Systolic Peak Amplitude', 'Tidal Wave Peak Ampltiude',
-                  "Dicrotic Peak Amplitude", 'Tail Wave Peak Ampltitude']
-        header.extend(['Diastolic Pressure (pF)', 'Systolic Pressure (pF)', 'Central Augmentation Index', 'Reflection Index', 'Stiffens Index (Without Height)'])
-        header.extend(["", 'Gaussian Systolic Time From Start', 'Gaussian Tidal Wave Time From Systolic', 'Gaussian Dicrotic Time From Tidal Wave',
-                  'Gaussian Tail Wave Time From Dicrotic', 'Gaussian End Time From Tail Wave', 'Gaussian Systolic Peak Amplitude', 'Gaussian Tidal Wave Peak Ampltiude',
-                  "Gaussian Dicrotic Peak Amplitude", 'Gaussian Tail Wave Peak Ampltitude'])
-        
+        else:
+            print("\tNot Saving Any Data as the Excel File Already Exists")
+            return None
+    
         # Parameters for Worksheet
         header = featureLabels    # Header Text     
         maxAddToExcelSheet = 1048500  # Max Rows in a Worksheet
@@ -245,7 +281,6 @@ class processPulseData(dataProcessing):
         # Save as New Excel File
         WB.save(excelFile)
         WB.close()
-            
         
     def extractFeatures(self, pulseFeaturesFile, prependedString):
         # Check if File Exists

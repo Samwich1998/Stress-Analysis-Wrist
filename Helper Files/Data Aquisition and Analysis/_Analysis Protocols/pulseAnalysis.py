@@ -2,8 +2,8 @@
 # Basic Modules
 import math
 import numpy as np
+from scipy import stats
 from bisect import bisect
-from scipy.stats.mstats import gmean
 # Peak Detection
 import scipy
 import scipy.signal
@@ -120,13 +120,27 @@ class signalProcessing:
             plotSeperation: Display the Indeces Identified as Around Mid-Sysolic Along with the Data
             plotGaussFit: Display the Gaussian Decomposition of Each Pulse
         ----------------------------------------------------------------------
-        """
+        """        
+        # Program Flags
+        self.plotGaussFit = plotGaussFit                # Plot the Guassian Decomposition
+        self.plotSeperation = plotSeperation            # Plot the First Derivative and Labeled Systolic Peak Location (General)
+        self.alreadyFilteredData = alreadyFilteredData  # If the Data is Already Filtered and Normalize, Do NOT Filter Again
+        
+        # Data Processing Parameters
+        self.minGaussianWidth = 10E-5   # THe Minimum Gaussian Width During Guassian Decomposition
+        self.minPeakIndSep = 10         # The Minimum Points Between the Dicrotic and Tail Peak
+        
+        self.resetGlobalVariables()
+        
+    def resetGlobalVariables(self):
         # Feature Tracking Parameters
         self.timeOffset = 0             # Store the Time Offset Between Files
-        self.featureList = []           # List of Lists of Features; Each Index Represents a Pulse; Each Pulse's List Represents its Features
-        self.numSecondsAverage = 10     # The Number of Pulses to Consider When Taking the Average Heart Rate
+        self.numSecondsAverage = 60     # The Number of Swconds to Consider When Taking the Averaging Data
         self.incomingPulseTimes = []    # An Ongoing List Representing the Times of Each Pulse's Peak
         self.heartRateListAverage = []  # An Ongoing List Representing the Heart Rate
+        # Feature Lists
+        self.featureListExact = []      # List of Lists of Features; Each Index Represents a Pulse; Each Pulse's List Represents its Features
+        self.featureListAverage = []    # List of Lists of Features Averaged in Time by self.numSecondsAverage; Each Index Represents a Pulse; Each Pulse's List Represents its Features
 
         # Peak Seperation Parameters
         self.peakStandard = 0;          # The Max First Deriviative of the Previous Pulse's Systolic Peak
@@ -141,20 +155,10 @@ class signalProcessing:
         self.calibratedSystolicAmplitude = None    # The Average Amplitude for the Calibrated Systolic/Diastolic Pressure
         self.calibratedSystolicAmplitudeList = []  # A List of Systolic Amplitudes for the Calibration
         
-        # Data Processing Parameters
-        self.minGaussianWidth = 10E-5   # THe Minimum Gaussian Width During Guassian Decomposition
-        self.minPeakIndSep = 10         # The Minimum Points Between the Dicrotic and Tail Peak
-        
-        # Program Flags
-        self.plotGaussFit = plotGaussFit                # Plot the Guassian Decomposition
-        self.plotSeperation = plotSeperation            # Plot the First Derivative and Labeled Systolic Peak Location (General)
-        self.alreadyFilteredData = alreadyFilteredData  # If the Data is Already Filtered and Normalize, Do NOT Filter Again
-        
         # Save Each Filtered Pulse
         self.time = []
         self.signalData = []
         self.filteredData = []
-
         
     def setPressureCalibration(self, systolicPressure0, diastolicPressure0):
         self.systolicPressure0 = systolicPressure0    # The Calibrated Systolic Pressure
@@ -203,7 +207,7 @@ class signalProcessing:
             maxBPM: Maximum Beats Per Minute Possible. 480 is the maximum recorded. 220 is a good threshold
         Use Case: Seperate the Pulses, Gaussian Decompositions, Feature Extraction
         ----------------------------------------------------------------------
-        """        
+        """       
         print("\nSeperating Pulse Data")
         # ------------------------- Set Up Analysis ------------------------- #
         # Calculate the Sampling Frequency, if None Present
@@ -273,7 +277,7 @@ class signalProcessing:
                 pulseStartInd = pulseEndInd; continue
             # --------------------------------------------------------------- #
             
-            # -------------------#--- Filter the Pulse ---------------------- #
+            # ----------------------- Filter the Pulse ---------------------- #
             # Extract Indivisual Pulse Data
             pulseData = signalData[pulseStartInd:pulseEndInd+1]
             # Filter the pulse, if not already filtered
@@ -650,7 +654,6 @@ class signalProcessing:
         velToTidalArea = scipy.integrate.simpson(normalizedPulse[systolicUpstrokeVelInd:tidalPeakInd+1], pulseTime[systolicUpstrokeVelInd:tidalPeakInd+1])
 
         # Average of the Pulse
-        geometricMean = gmean(normalizedPulse)
         pulseAverage = np.mean(normalizedPulse)
         # ------------------------------------------------------------------- #
 
@@ -745,7 +748,7 @@ class signalProcessing:
 
         # Saving Features from Section: Under the Curve Features
         pulseFeatures.extend([pulseArea, pulseAreaSquared, leftVentricleLoad, diastolicArea])
-        pulseFeatures.extend([systolicUpSlopeArea, velToTidalArea, geometricMean, pulseAverage])
+        pulseFeatures.extend([systolicUpSlopeArea, velToTidalArea, pulseAverage])
         
         # Saving Features from Section: Ratio Features
         pulseFeatures.extend([areaRatio, systolicDicroticNotchAmpRatio, systolicDicroticNotchVelRatio, systolicDicroticNotchAccelRatio])
@@ -763,7 +766,9 @@ class signalProcessing:
         pulseFeatures.extend([centralAugmentationIndex, centralAugmentationIndex_EST, reflectionIndex, stiffensIndex])
 
         # Save the Pulse Features
-        self.featureList.append(pulseFeatures)
+        pulseFeatures = np.array(pulseFeatures)
+        self.featureListExact.append(pulseFeatures)
+        self.featureListAverage.extend(stats.trim_mean(np.array(self.featureListExact)[:,1:][ np.array(self.featureListExact)[:,0] >= self.timePoint - self.numSecondsAverage ], 0.3))
     
     def butterParams(self, cutoffFreq = [0.1, 7], samplingFreq = 800, order=3, filterType = 'band'):
         nyq = 0.5 * samplingFreq
