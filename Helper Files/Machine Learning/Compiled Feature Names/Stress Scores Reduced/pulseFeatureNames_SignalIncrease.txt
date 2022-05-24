@@ -1,0 +1,4 @@
+"
+pulseFeatures = [self.timePoint]
+pulseFeatures.extend([systolicUpSlopeArea])
+"

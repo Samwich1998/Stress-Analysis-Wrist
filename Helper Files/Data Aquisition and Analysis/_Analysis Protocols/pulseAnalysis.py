@@ -658,46 +658,43 @@ class signalProcessing:
         # ------------------------------------------------------------------- #
 
         # -------------------------- Ratio Features ------------------------- #        
-        # Systole and Diastole Ratios
-        areaRatio = leftVentricleLoad/diastolicArea
+        # # Systole and Diastole Ratios
+        # areaRatio = leftVentricleLoad/diastolicArea
         systolicDicroticNotchAmpRatio = dicroticNotchAmp/systolicPeakAmp
-        systolicDicroticNotchVelRatio = dicroticNotchVel/systolicPeakVel
-        systolicDicroticNotchAccelRatio = dicroticNotchAccel/systolicPeakAccel
+        # systolicDicroticNotchVelRatio = dicroticNotchVel/systolicPeakVel
+        # systolicDicroticNotchAccelRatio = dicroticNotchAccel/systolicPeakAccel
         
-        # Other Systolic Amplitude Ratios
-        systolicTidalAmpRatio = tidalPeakAmp/systolicPeakAmp
-        systolicDicroticAmpRatio = dicroticPeakAmp/systolicPeakAmp
-        # Other Diastole Ratios
-        dicroticNotchTidalAmpRatio = tidalPeakAmp/dicroticNotchAmp
-        dicroticNotchDicroticAmpRatio = dicroticPeakAmp/dicroticNotchAmp
+        # # Other Diastole Ratios
+        # dicroticNotchTidalAmpRatio = tidalPeakAmp/dicroticNotchAmp
+        # dicroticNotchDicroticAmpRatio = dicroticPeakAmp/dicroticNotchAmp
         
-        # Systolic Velocty Ratios
-        systolicTidalVelRatio = tidalPeakVel/systolicPeakVel
-        systolicDicroticVelRatio = dicroticPeakVel/systolicPeakVel
-        # Diastole Velocity Ratios
-        dicroticNotchTidalVelRatio = tidalPeakVel/dicroticNotchVel
-        dicroticNotchDicroticVelRatio = dicroticPeakVel/dicroticNotchVel
+        # # Systolic Velocty Ratios
+        # systolicTidalVelRatio = tidalPeakVel/systolicPeakVel
+        # systolicDicroticVelRatio = dicroticPeakVel/systolicPeakVel
+        # # Diastole Velocity Ratios
+        # dicroticNotchTidalVelRatio = tidalPeakVel/dicroticNotchVel
+        # dicroticNotchDicroticVelRatio = dicroticPeakVel/dicroticNotchVel
         
-        # Systolic Acceleration Ratios
-        systolicTidalAccelRatio = tidalPeakAccel/systolicPeakAccel
-        systolicDicroticAccelRatio = dicroticPeakAccel/systolicPeakAccel
-        # Diastole Acceleration Ratios
-        dicroticNotchTidalAccelRatio = tidalPeakAccel/dicroticNotchAccel
-        dicroticNotchDicroticAccelRatio = dicroticPeakAccel/dicroticNotchAccel
+        # # Systolic Acceleration Ratios
+        # systolicTidalAccelRatio = tidalPeakAccel/systolicPeakAccel
+        # systolicDicroticAccelRatio = dicroticPeakAccel/systolicPeakAccel
+        # # Diastole Acceleration Ratios
+        # dicroticNotchTidalAccelRatio = tidalPeakAccel/dicroticNotchAccel
+        # dicroticNotchDicroticAccelRatio = dicroticPeakAccel/dicroticNotchAccel
         # ------------------------------------------------------------------- #
 
         # -------------------------- Slope Features --------=---------------- #        
         # Systolic Slopes
-        systolicSlopeUp = np.polyfit(pulseTime[systolicUpstrokeAccelMaxInd: systolicUpstrokeAccelMinInd], normalizedPulse[systolicUpstrokeAccelMaxInd: systolicUpstrokeAccelMinInd], 1)[0]
+        # systolicSlopeUp = np.polyfit(pulseTime[systolicUpstrokeAccelMaxInd: systolicUpstrokeAccelMinInd], normalizedPulse[systolicUpstrokeAccelMaxInd: systolicUpstrokeAccelMinInd], 1)[0]
 
-        # Tidal Slopes
-        tidalSlope = np.polyfit(pulseTime[tidalPeakInd:tidalEndInd], normalizedPulse[tidalPeakInd:tidalEndInd], 1)[0]
+        # # Tidal Slopes
+        # tidalSlope = np.polyfit(pulseTime[tidalPeakInd:tidalEndInd], normalizedPulse[tidalPeakInd:tidalEndInd], 1)[0]
         
-        # Dicrotic Slopes
-        DicroticSlopeUp = np.polyfit(pulseTime[dicroticNotchInd:dicroticPeakInd], normalizedPulse[dicroticNotchInd:dicroticPeakInd], 1)[0]
+        # # Dicrotic Slopes
+        # dicroticSlopeUp = np.polyfit(pulseTime[dicroticNotchInd:dicroticPeakInd], normalizedPulse[dicroticNotchInd:dicroticPeakInd], 1)[0]
         
-        # Tail Slopes
-        endSlope =  np.polyfit(pulseTime[dicroticFallVelMinInd:], normalizedPulse[dicroticFallVelMinInd:], 1)[0]
+        # # Tail Slopes
+        # endSlope =  np.polyfit(pulseTime[dicroticFallVelMinInd:], normalizedPulse[dicroticFallVelMinInd:], 1)[0]
         # ------------------------------------------------------------------- #
         
         # ----------------------- Biological Features ----------------------- #        
@@ -727,48 +724,81 @@ class signalProcessing:
         
         # ------------------------ Organize Features ------------------------ #        
         pulseFeatures = [self.timePoint]
-        # Saving Features from Section: Extract Data from Peak Inds
-        pulseFeatures.extend([systolicUpstrokeAccelMaxTime, systolicUpstrokeVelTime, systolicUpstrokeAccelMinTime, systolicPeakTime])
-        pulseFeatures.extend([tidalPeakTime, tidalEndTime])
-        pulseFeatures.extend([dicroticNotchTime, dicroticRiseVelMaxTime, dicroticPeakTime, dicroticFallVelMinTime])
-        pulseFeatures.extend([systolicUpstrokeAccelMaxAmp, systolicUpstrokeVelAmp, systolicUpstrokeAccelMinAmp, systolicPeakAmp])
-        pulseFeatures.extend([tidalPeakAmp, tidalEndAmp])
-        pulseFeatures.extend([dicroticNotchAmp, dicroticRiseVelMaxAmp, dicroticPeakAmp, dicroticFallVelMinAmp])
-        pulseFeatures.extend([systolicUpstrokeAccelMaxVel, systolicUpstrokeVelVel, systolicUpstrokeAccelMinVel, systolicPeakVel])
-        pulseFeatures.extend([tidalPeakVel, tidalEndVel])
-        pulseFeatures.extend([dicroticNotchVel, dicroticRiseVelMaxVel, dicroticPeakVel, dicroticFallVelMinVel])
-        pulseFeatures.extend([systolicUpstrokeAccelMaxAccel, systolicUpstrokeVelAccel, systolicUpstrokeAccelMinAccel, systolicPeakAccel])
-        pulseFeatures.extend([tidalPeakAccel, tidalEndAccel])
-        pulseFeatures.extend([dicroticNotchAccel, dicroticRiseVelMaxAccel, dicroticPeakAccel])
+        # # Saving Features from Section: Extract Data from Peak Inds
+        # pulseFeatures.extend([systolicUpstrokeAccelMaxTime, systolicUpstrokeVelTime, systolicUpstrokeAccelMinTime, systolicPeakTime])
+        # pulseFeatures.extend([tidalPeakTime, tidalEndTime])
+        # pulseFeatures.extend([dicroticNotchTime, dicroticRiseVelMaxTime, dicroticPeakTime, dicroticFallVelMinTime])
+        # pulseFeatures.extend([systolicUpstrokeAccelMaxAmp, systolicUpstrokeVelAmp, systolicUpstrokeAccelMinAmp, systolicPeakAmp])
+        # pulseFeatures.extend([tidalPeakAmp, tidalEndAmp])
+        # pulseFeatures.extend([dicroticNotchAmp, dicroticRiseVelMaxAmp, dicroticPeakAmp, dicroticFallVelMinAmp])
+        # pulseFeatures.extend([systolicUpstrokeAccelMaxVel, systolicUpstrokeVelVel, systolicUpstrokeAccelMinVel, systolicPeakVel])
+        # pulseFeatures.extend([tidalPeakVel, tidalEndVel])
+        # pulseFeatures.extend([dicroticNotchVel, dicroticRiseVelMaxVel, dicroticPeakVel, dicroticFallVelMinVel])
+        # pulseFeatures.extend([systolicUpstrokeAccelMaxAccel, systolicUpstrokeVelAccel, systolicUpstrokeAccelMinAccel, systolicPeakAccel])
+        # pulseFeatures.extend([tidalPeakAccel, tidalEndAccel])
+        # pulseFeatures.extend([dicroticNotchAccel, dicroticRiseVelMaxAccel, dicroticPeakAccel])
         
-        # Saving Features from Section: Time Features
-        pulseFeatures.extend([pulseDuration, systolicTime, DiastolicTime, leftVentricularPerformance])
-        pulseFeatures.extend([maxDerivToSystolic, systolicToTidal, systolicToDicroticNotch, dicroticNotchToTidal, dicroticNotchToDicrotic])
-        pulseFeatures.extend([systolicUpSlopeTime, midToEndTidal, tidalToDicroticVelPeakInterval])
-
-        # Saving Features from Section: Under the Curve Features
-        pulseFeatures.extend([pulseArea, pulseAreaSquared, leftVentricleLoad, diastolicArea])
-        pulseFeatures.extend([systolicUpSlopeArea, velToTidalArea, pulseAverage])
+        # # Saving Features from Section: Time Features
+        # pulseFeatures.extend([pulseDuration, systolicTime, DiastolicTime, leftVentricularPerformance])
+        # pulseFeatures.extend([maxDerivToSystolic, systolicToTidal, systolicToDicroticNotch, dicroticNotchToTidal, dicroticNotchToDicrotic])
+        # pulseFeatures.extend([systolicUpSlopeTime, midToEndTidal, tidalToDicroticVelPeakInterval])
         
-        # Saving Features from Section: Ratio Features
-        pulseFeatures.extend([areaRatio, systolicDicroticNotchAmpRatio, systolicDicroticNotchVelRatio, systolicDicroticNotchAccelRatio])
-        pulseFeatures.extend([systolicTidalAmpRatio, systolicDicroticAmpRatio, dicroticNotchTidalAmpRatio, dicroticNotchDicroticAmpRatio])
-        pulseFeatures.extend([systolicTidalVelRatio, systolicDicroticVelRatio, dicroticNotchTidalVelRatio, dicroticNotchDicroticVelRatio])
-        pulseFeatures.extend([systolicTidalAccelRatio, systolicDicroticAccelRatio, dicroticNotchTidalAccelRatio, dicroticNotchDicroticAccelRatio])
+        # # Saving Features from Section: Under the Curve Features
+        # pulseFeatures.extend([pulseArea, pulseAreaSquared, leftVentricleLoad, diastolicArea])
+        # pulseFeatures.extend([systolicUpSlopeArea, velToTidalArea, pulseAverage])
+        
+        # # Saving Features from Section: Ratio Features
+        # pulseFeatures.extend([areaRatio, systolicDicroticNotchAmpRatio, systolicDicroticNotchVelRatio, systolicDicroticNotchAccelRatio])
+        # pulseFeatures.extend([systolicTidalAmpRatio, dicroticNotchTidalAmpRatio, dicroticNotchDicroticAmpRatio])
+        # pulseFeatures.extend([systolicTidalVelRatio, systolicDicroticVelRatio, dicroticNotchTidalVelRatio, dicroticNotchDicroticVelRatio])
+        # pulseFeatures.extend([systolicTidalAccelRatio, systolicDicroticAccelRatio, dicroticNotchTidalAccelRatio, dicroticNotchDicroticAccelRatio])
+        
+        # # Saving Features from Section: Slope Features
+        # pulseFeatures.extend([systolicSlopeUp, tidalSlope, dicroticSlopeUp, endSlope])
+        
+        # # Saving Features from Section: Biological Features
+        # pulseFeatures.extend([momentumDensity, pseudoCardiacOutput, pseudoStrokeVolume])
+        # pulseFeatures.extend([diastolicPressure, systolicPressure, pressureRatio, meanArterialBloodPressure, pseudoSystemicVascularResistance, pseudoStrokeVolume])
+        # pulseFeatures.extend([maxSystolicVelocity, valveCrossSectionalArea, velocityTimeIntegral, velocityTimeIntegralABS, velocityTimeIntegral_ALT])
+        # pulseFeatures.extend([centralAugmentationIndex, centralAugmentationIndex_EST, reflectionIndex, stiffensIndex])
 
-        # Saving Features from Section: Slope Features
-        pulseFeatures.extend([systolicSlopeUp, tidalSlope, DicroticSlopeUp, endSlope])
 
-        # Saving Features from Section: Biological Features
-        pulseFeatures.extend([momentumDensity, pseudoCardiacOutput, pseudoStrokeVolume])
-        pulseFeatures.extend([diastolicPressure, systolicPressure, pressureRatio, meanArterialBloodPressure, pseudoSystemicVascularResistance, pseudoStrokeVolume])
-        pulseFeatures.extend([maxSystolicVelocity, valveCrossSectionalArea, velocityTimeIntegral, velocityTimeIntegralABS, velocityTimeIntegral_ALT])
-        pulseFeatures.extend([centralAugmentationIndex, centralAugmentationIndex_EST, reflectionIndex, stiffensIndex])
 
+        # pulseFeatures.extend([dicroticNotchAccel, dicroticFallVelMinTime])
+        # pulseFeatures.extend([systolicTime, systolicUpSlopeTime, systolicDicroticNotchAmpRatio])
+        # pulseFeatures.extend([reflectionIndex, pulseDuration, leftVentricularPerformance, pseudoSystemicVascularResistance])
+        # pulseFeatures.extend([dicroticPeakTime, dicroticNotchTime])
+        
+        # pulseFeatures.extend([tidalPeakTime, dicroticRiseVelMaxTime, systolicUpstrokeAccelMaxAmp, systolicToDicroticNotch])
+        # pulseFeatures.extend([systolicDicroticNotchAccelRatio, dicroticNotchDicroticAmpRatio, dicroticSlopeUp])
+
+        # pulseFeatures.extend([systolicUpstrokeAccelMinTime, tidalEndAmp, dicroticNotchTidalAmpRatio])
+        # pulseFeatures.extend([tidalEndVel, dicroticRiseVelMaxVel, dicroticPeakAccel, DiastolicTime])
+        # pulseFeatures.extend([maxDerivToSystolic, dicroticNotchToDicrotic, dicroticSlopeUp])
+        
+        
+        
+        # pulseFeatures.extend([dicroticNotchTidalVelRatio, meanArterialBloodPressure, systolicTidalAccelRatio, dicroticNotchTidalAccelRatio])
+
+        # pulseFeatures.extend([centralAugmentationIndex, diastolicPressure, dicroticNotchAccel, dicroticNotchDicroticAccelRatio, dicroticNotchDicroticAmpRatio])
+        # pulseFeatures.extend([dicroticNotchDicroticVelRatio, dicroticNotchTidalAccelRatio, dicroticNotchToDicrotic])
+        # pulseFeatures.extend([dicroticNotchToTidal, midToEndTidal])
+                              
+        # pulseFeatures.extend([systolicUpstrokeAccelMaxAmp, tidalSlope, systolicPressure])
+        
+    
+        # Stress Signal Features for Stress Scores        
+        # pulseFeatures.extend([reflectionIndex, systolicDicroticNotchAmpRatio, systolicUpstrokeAccelMinVel, centralAugmentationIndex_EST])
+        # pulseFeatures.extend([maxSystolicVelocity, velocityTimeIntegral_ALT, systolicUpstrokeVelVel])
+        pulseFeatures.extend([systolicDicroticNotchAmpRatio, systolicUpstrokeAccelMinVel])
+
+        # Signal Increase Features for Stress Scores
+        pulseFeatures.extend([systolicUpSlopeArea])
+        
         # Save the Pulse Features
         pulseFeatures = np.array(pulseFeatures)
         self.featureListExact.append(pulseFeatures)
-        self.featureListAverage.extend(stats.trim_mean(np.array(self.featureListExact)[:,1:][ np.array(self.featureListExact)[:,0] >= self.timePoint - self.numSecondsAverage ], 0.3))
+        self.featureListAverage.append(stats.trim_mean(np.array(self.featureListExact)[:,1:][ np.array(self.featureListExact)[:,0] >= self.timePoint - self.numSecondsAverage ], 0.3))
     
     def butterParams(self, cutoffFreq = [0.1, 7], samplingFreq = 800, order=3, filterType = 'band'):
         nyq = 0.5 * samplingFreq

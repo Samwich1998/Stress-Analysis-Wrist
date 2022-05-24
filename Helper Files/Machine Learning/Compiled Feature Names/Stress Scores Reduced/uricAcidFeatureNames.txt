@@ -1,0 +1,4 @@
+"
+peakFeatures.extend = []
+peakFeatures.extend([peakEntropy])
+"

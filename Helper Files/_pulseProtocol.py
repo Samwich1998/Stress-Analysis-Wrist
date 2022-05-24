@@ -57,14 +57,14 @@ if __name__ == "__main__":
 
     # Program Flags
     trainModel = False              # Train a Model with the Collected Features.
+    
     # Data Collection Parameters
     useAllFiles = True              # If True, Read in All the Tabulated Data in the Input Folder.
-            
     # Analysis Flags
     alreadyFilteredData = False     # Skip the Filtering and Baseline Subtraction.
-    plotPulseFeatures = True        # Plot the Collected Features.
     plotSeperation = False          # Plot the Results of Seperating the Pulse Data.
-    saveInputData = True            # Save the Analyzed Data: The Peak Features for Each Well-Shaped Pulse
+    plotFeatures = True             # Plot the Collected Features.
+    saveAnalysis = True             # Save the Analyzed Data: The Peak Features for Each Well-Shaped Pulse
     plotPulses = False              # Plot Each Successful Pulse Analyzed.
     
     # Analysis Parameters
@@ -81,8 +81,8 @@ if __name__ == "__main__":
     # ------------------------- Preparation Steps -------------------------- #
 
     # Create all the Pulse Analysis Instances
-    excelDataPulse = excelProcessing.processPulseData()
-    dataProcessing = pulseAnalysis.signalProcessing(alreadyFilteredData, plotPulses, plotSeperation)
+    excelProcessingPulse = excelProcessing.processPulseData()
+    pulseAnalysisProtocol = pulseAnalysis.signalProcessing(alreadyFilteredData, plotPulses, plotSeperation)
     
     # Find the Scale Factor for the Data
     scaleFactorMap = {'F': 1, 'mF': 10**-3, 'uF': 10**-6, 'nF': 10**-9, 'pF': 10**-12, 'fF': 10**-15}
@@ -96,13 +96,13 @@ if __name__ == "__main__":
                 pulseExcelFiles.append(inputFolder + file)
         pulseExcelFiles = natsorted(pulseExcelFiles)
     
-    if trainModel or plotPulseFeatures:
+    if trainModel or plotFeatures:
         # Extract the Pulse Features we are Using
-        pulseFeaturesFile = "./Machine Learning/Feature Labels/pulseFeatures.txt"
-        pulseFeatures = excelDataPulse.extractFeatures(pulseFeaturesFile, prependedString = "pulseFeatures.extend([")
+        pulseFeaturesFile = "./Machine Learning/Compiled Feature Names/pulseFeatureLabels.txt"
+        pulseFeatureLabels = excelProcessingPulse.extractFeatures(pulseFeaturesFile, prependedString = "pulseFeatures.extend([")
     
     # Saves the Analyzed Data
-    if saveInputData:
+    if saveAnalysis:
         saveDataFolder = inputFolder + "Pulse Analysis/"    # Data Folder to Save the Data; MUST END IN '/'
         sheetName = "Blood Pulse Data"                      # If SheetName Already Exists, Excel Will Add 1 to the end (The Copy Number) 
 
@@ -121,8 +121,7 @@ if __name__ == "__main__":
         saveModel = False
         saveDataFolder = trainingDataExcelFolder + "Data Analysis/" + modelType + "/"
         # Get the Machine Learning Module
-        pulseFeatures = []
-        performMachineLearning = machineLearningMain.predictionModelHead(modelType, modelPath, numFeatures = len(pulseFeatures), gestureClasses = machineLearningClasses, saveDataFolder = saveDataFolder)
+        performMachineLearning = machineLearningMain.predictionModelHead(modelType, modelPath, numFeatures = len(pulseFeatureLabels), gestureClasses = machineLearningClasses, saveDataFolder = saveDataFolder)
         predictionModel = performMachineLearning.predictionModel
 
     # ---------------------------------------------------------------------- #
@@ -131,7 +130,7 @@ if __name__ == "__main__":
     # For Each PulseFile, Collect the Data in the Same Instance
     for pulseExcelFile in pulseExcelFiles:
         # Read Data from Excel
-        time, signalData = excelDataPulse.getData(pulseExcelFile, testSheetNum = 0)
+        time, signalData = excelProcessingPulse.getData(pulseExcelFile, testSheetNum = 0)
         # Get Data into Farads
         if not alreadyFilteredData:
             signalData = signalData*scaleFactor
@@ -139,30 +138,30 @@ if __name__ == "__main__":
         # Calibrate Systolic and Diastolic Pressure
         fileBasename = os.path.basename(pulseExcelFile)
         pressureInfo = fileBasename.split("SYS")
-        if len(pressureInfo) > 1 and dataProcessing.systolicPressure0 == None:
+        if len(pressureInfo) > 1 and pulseAnalysisProtocol.systolicPressure0 == None:
             pressureInfo = pressureInfo[-1].split(".")[0]
             systolicPressure0, diastolicPressure0 = pressureInfo.split("_DIA")
-            dataProcessing.setPressureCalibration(float(systolicPressure0), float(diastolicPressure0))
+            pulseAnalysisProtocol.setPressureCalibration(float(systolicPressure0), float(diastolicPressure0))
         
         # Check Whether the StartTime is Specified in the File
         if fileBasename.lower() in ["cpt", "exercise", "vr", "start"] and stimulusTimes[0] != None:
-            stimulusTimes[0] = dataProcessing.timeOffset
+            stimulusTimes[0] = pulseAnalysisProtocol.timeOffset
         
         # Seperate Pulses, Perform Indivisual Analysis, and Extract Features
-        pulseData = dataProcessing.analyzePulse(time, signalData, minBPM = 30, maxBPM = 180)
+        pulseData = pulseAnalysisProtocol.analyzePulse(time, signalData, minBPM = 30, maxBPM = 180)
     
     # Plot the Features Collected from the Pulses
-    if plotPulseFeatures:
-        dataProcessing.featureListExact = np.array(dataProcessing.featureListExact)
-        plotPulseFeatures = featureAnalysis.featureAnalysis(dataProcessing.featureListExact[:,0], dataProcessing.featureListExact[:,1:], pulseFeatures[1:], stimulusTimes, saveDataFolder)
-        plotPulseFeatures.singleFeatureAnalysis()
+    if plotFeatures:
+        pulseAnalysisProtocol.featureListExact = np.array(pulseAnalysisProtocol.featureListExact)
+        plotFeatures = featureAnalysis.featureAnalysis(pulseAnalysisProtocol.featureListExact[:,0], pulseAnalysisProtocol.featureListExact[:,1:], pulseFeatureLabels[1:], stimulusTimes, saveDataFolder)
+        plotFeatures.singleFeatureAnalysis()
     
     # Save Pulse Data
-    if saveInputData:
+    if saveAnalysis:
         saveCompiledData = saveDataFolder + "Compiled Data in Excel/"
         # Save the Features and Filtered Data
-        excelDataPulse.saveResults(dataProcessing.featureListExact, pulseFeatures, saveCompiledData, "Feature List.xlsx", sheetName)
-        excelDataPulse.saveFilteredData(dataProcessing.time, dataProcessing.signalData, dataProcessing.filteredData, saveCompiledData, "Filtered Data.xlsx", "Filtered Data")
+        excelProcessingPulse.saveResults(pulseAnalysisProtocol.featureListExact, pulseFeatureLabels, saveCompiledData, "Feature List.xlsx", sheetName)
+        excelProcessingPulse.saveFilteredData(pulseAnalysisProtocol.time, pulseAnalysisProtocol.signalData, pulseAnalysisProtocol.filteredData, saveCompiledData, "Filtered Data.xlsx", "Filtered Data")
         
     # ---------------------------------------------------------------------- #
     #                          Train the Model                               #
@@ -189,7 +188,7 @@ if __name__ == "__main__":
         featureLabels = featureLabels[0:6]
                     
         # Train the Data on the Gestures
-        performMachineLearning.trainModel(signalData, signalLabels, pulseFeatures)
+        performMachineLearning.trainModel(signalData, signalLabels, pulseFeatureLabels)
         # Save Signals and Labels
         if False and performMachineLearning.map2D:
             saveInputs = excelProcessing.saveExcel()

@@ -1,0 +1,5 @@
+"
+pulseFeatures = [self.timePoint]
+pulseFeatures.extend([reflectionIndex, systolicDicroticNotchAmpRatio, systolicUpstrokeAccelMinVel, centralAugmentationIndex_EST])
+pulseFeatures.extend([maxSystolicVelocity, velocityTimeIntegral_ALT, systolicUpstrokeVelVel])
+"

@@ -28,8 +28,11 @@ import shap
 # Import Machine Learning Files
 sys.path.append('./Helper Files/Machine Learning/Classification Methods/')
 sys.path.append('./Machine Learning/Classification Methods/') # Folder with Machine Learning Files
+import supportVectorRegression as SVR   # Functions for Support Vector Regression Algorithm
 import neuralNetwork as NeuralNet       # Functions for Neural Network Algorithm
-import Linear_Regression as LR          # Functions for Linear Regression Algorithm
+import logisticRegression as LR         # Functions for Linear Regression Algorithm
+import ridgeRegression as Ridge         # Functions for Ridge Regression Algorithm
+import elasticNet as elasticNet         # Functions for Elastic Net Algorithm
 import randomForest                     # Functions for the Random Forest Algorithm
 import KNN as KNN                       # Functions for K-Nearest Neighbors' Algorithm
 import SVM as SVM                       # Functions for Support Vector Machine algorithm
@@ -40,7 +43,7 @@ import createHeatMap as createMap       # Functions for Neural Network
 
 class predictionModelHead:
     
-    def __init__(self, modelType, modelPath, numFeatures, machineLearningClasses, saveDataFolder):
+    def __init__(self, modelType, modelPath, numFeatures, machineLearningClasses, saveDataFolder, supportVectorKernel = ""):
         # Store Parameters
         self.modelType = modelType
         self.modelPath = modelPath
@@ -48,6 +51,11 @@ class predictionModelHead:
         self.machineLearningClasses = machineLearningClasses
         self.numClasses = len(machineLearningClasses)
         self.testSize = 0.4
+        self.supportVectorKernel = supportVectorKernel
+        
+        self.possibleModels = ['RF', 'LR', 'KNN', 'SVM', 'RG', 'EN', "SVR"]
+        if modelType not in self.possibleModels:
+            exit("The Model Type is Not Found")
         
         # Holder Variables
         self.map2D = []
@@ -67,14 +75,23 @@ class predictionModelHead:
             predictionModel = randomForest.randomForest(modelPath = modelPath)
         elif modelType == "LR":
             predictionModel = LR.logisticRegression(modelPath = modelPath)
+        elif modelType == "RG":
+            predictionModel = Ridge.ridgeRegression(modelPath = modelPath)
+        elif modelType == "EN":
+            predictionModel = elasticNet.elasticNet(modelPath = modelPath)
         elif modelType == "KNN":
             predictionModel = KNN.KNN(modelPath = modelPath, numClasses = self.numClasses)
         elif modelType == "SVM":
-            svmType = "poly"
-            predictionModel = SVM.SVM(modelPath = modelPath, modelType = svmType, polynomialDegree = 3)
+            predictionModel = SVM.SVM(modelPath = modelPath, modelType = self.supportVectorKernel, polynomialDegree = 3)
             # Section off SVM Data Analysis Into the Type of Kernels
             if self.saveDataFolder:
-                self.saveDataFolder += svmType +"/"
+                self.saveDataFolder += self.supportVectorKernel +"/"
+                os.makedirs(self.saveDataFolder, exist_ok=True)
+        elif modelType == "SVR":
+            predictionModel = SVR.supportVectorRegression(modelPath = modelPath, modelType = self.supportVectorKernel, polynomialDegree = 3)
+            # Section off SVM Data Analysis Into the Type of Kernels
+            if self.saveDataFolder:
+                self.saveDataFolder += self.supportVectorKernel +"/"
                 os.makedirs(self.saveDataFolder, exist_ok=True)
         else:
             print("No Matching Machine Learning Model was Found for '", modelType, "'");
@@ -82,72 +99,74 @@ class predictionModelHead:
         # Return the Precition Model
         return predictionModel
     
-    def scoreClassificationModel(self, signalData, signalLabels):
+    def scoreClassificationModel(self, signalData, signalLabels, stratifyBy = []):
         # Extract a list of unique labels
-        possibleClassifications = list(set(signalLabels))
+        # possibleClassifications = list(set(signalLabels))
         classificationScores = []
         # Taking the Average Score Each Time
-        for _ in range(100):
+        for _ in range(300):
             # Train the Model with the Training Data
-            Training_Data, Testing_Data, Training_Labels, Testing_Labels = train_test_split(signalData, signalLabels, test_size = self.testSize, shuffle= True, stratify=signalLabels)
+            Training_Data, Testing_Data, Training_Labels, Testing_Labels = train_test_split(signalData, signalLabels, test_size=0.4, shuffle= True, stratify=stratifyBy)
             self.predictionModel.model.fit(Training_Data, Training_Labels)
             
             classAccuracies = []
-            for classification in possibleClassifications:
-                testClassData = Testing_Data[Testing_Labels == classification]
-                testClassLabels = self.predictionModel.model.predict(testClassData)
-                
-                classAccuracy = len(testClassLabels[testClassLabels == classification])/len(testClassLabels)
-                classAccuracies.append(classAccuracy)
+            # if not testStressScores:
+            #     for classification in possibleClassifications:
+            #         testClassData = Testing_Data[Testing_Labels == classification]
+            #         testClassLabels = self.predictionModel.model.predict(testClassData)
+                    
+            #         classAccuracy = len(testClassLabels[testClassLabels == classification])/len(testClassLabels)
+            #         classAccuracies.append(classAccuracy)
             testClassLabels = self.predictionModel.model.predict(Testing_Data)
             classAccuracy = len(testClassLabels[testClassLabels == Testing_Labels])/len(testClassLabels)
             classAccuracies.append(classAccuracy)
             
             classificationScores.append(classAccuracies)
         
-        averageClassAccuracy = np.mean(classificationScores, axis=0)
+        averageClassAccuracy = stats.trim_mean(classificationScores, 0.4)
         return averageClassAccuracy
         
         
-    def trainModel(self, signalData, signalLabels, featureLabels = [], returnScore = False):
+    def trainModel(self, signalData, signalLabels, featureLabels = [], returnScore = False, stratifyBy = []):
         if len(featureLabels) != 0 and not len(featureLabels) == len(signalData[0]):
             print("The Number of Feature Labels Provided Does Not Match the Number of Features")
             print("Removing Feature Labels")
             featureLabels = []
             
-        signalData = np.array(signalData); signalLabels = np.array(signalLabels)
+        signalData = np.array(signalData); signalLabels = np.array(signalLabels); featureLabels = np.array(featureLabels)
         # Find the Data Distribution
-        classDistribution = collections.Counter(signalLabels)
+        #classDistribution = collections.Counter(signalLabels)
         # print("Class Distribution:", classDistribution)
         # print("Number of Data Points = ", len(classDistribution))
         
-        if self.modelType in ['RF', 'LR', 'KNN', 'SVM', 'NN']:
+        if self.modelType in self.possibleModels:
             # Train the Model Multiple Times
-            means = []
-            for _ in range(1):
-                modelScore = []
-                # Taking the Average Score Each Time
-                for _ in range(200):
-                    # Train the Model with the Training Data
-                    Training_Data, Testing_Data, Training_Labels, Testing_Labels = train_test_split(signalData, signalLabels, test_size=0.5, shuffle= True, stratify=signalLabels)
-                    modelScore.append(self.predictionModel.trainModel(Training_Data, Training_Labels, Testing_Data, Testing_Labels))
-                # Display the Spread of Scores
-                plt.hist(modelScore, 100, facecolor='blue', alpha=0.5)
-                # Fit the Mean Distribution and Save the Mean
-                ae, loce, scalee = stats.skewnorm.fit(modelScore)
-                means.append(np.round(loce*100, 2))
-            # Take the Median Score as the True Score
-            meanScore = np.median(means, axis=0)
+            modelScores = []
+            # Taking the Average Score Each Time
+            for _ in range(300):
+                # Train the Model with the Training Data
+                Training_Data, Testing_Data, Training_Labels, Testing_Labels = train_test_split(signalData, signalLabels, test_size=0.5, shuffle= True, stratify=stratifyBy)
+                modelScores.append(self.predictionModel.trainModel(Training_Data, Training_Labels, Testing_Data, Testing_Labels))
             if returnScore:
-                print("Mean Testing Accuracy (Return):", meanScore)
+                #print("Mean Testing Accuracy (Return):", meanScore)
+                return stats.trim_mean(modelScores, 0.4)
+            # Display the Spread of Scores
+            plt.hist(modelScores, 100, facecolor='blue', alpha=0.5)
+            # Fit the Mean Distribution and Save the Mean
+            ae, loce, scalee = stats.skewnorm.fit(modelScores)
+            # Take the Median Score as the True Score
+            meanScore = np.round(loce*100, 2)
+            if returnScore:
+                #print("Mean Testing Accuracy (Return):", meanScore)
                 return meanScore
             #print("Mean Testing Accuracy:", meanScore)
             # Label Accuracy
             self.accuracyDistributionPlot_Average(signalData, signalLabels, self.machineLearningClasses, "Test")
             self.accuracyDistributionPlot_Average(signalData, signalLabels, self.machineLearningClasses, "Full")
             # Extract Feature Importance
-            self.featureImportance(signalData, signalLabels, signalData, signalLabels, featureLabels = featureLabels, numTrials = 100)
-
+            #self.featureImportance(signalData, signalLabels, signalData, signalLabels, featureLabels = featureLabels, numTrials = 100)
+            self.predictionModel.trainModel(Training_Data, Training_Labels, Testing_Data, Testing_Labels)
+            
         if self.modelType == "NN":
             # Plot the training loss    
             self.predictionModel.plotStats()

@@ -1,0 +1,5 @@
+"
+temperatureFeatures = []
+temperatureFeatures.extend([meanSignal, meanSignalRest, meanSignalStress, meanSignalRecovery, meanStressIncrease])
+temperatureFeatures.extend([peakSTD, peakEntropy, stressSlope, relaxationSlope])
+"

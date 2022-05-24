@@ -171,6 +171,44 @@ class featureAnalysis:
                 plt.cla()
                 plt.clf()    
                 
+    def featureComparisonAgainstONE(self, featureList1, features2, featureLabels, featureNames1, featuresLabel2, folderName):
+        # Create Directory to Save the Figures
+        saveDataFolder = self.saveDataFolder + "singleFeatureComparison/" + folderName + "/"
+        os.makedirs(saveDataFolder, exist_ok=True)
+                
+        featureList1 = np.array(featureList1)
+        features2 = np.array(features2)
+        
+        colorList = ['ko', 'ro', 'bo']
+        labelList = ['Cold', 'Exercise', 'VR']
+
+        for featureInd1 in range(len(featureList1[0])):
+            
+            features1 = featureList1[:, featureInd1]
+                
+            fig = plt.figure()
+            addedLegend = []
+            for ind in range(len(featureLabels)):
+                labelInd = featureLabels[ind]
+                if labelList[labelInd] not in addedLegend:
+                    addedLegend.append(labelList[labelInd])
+                    plt.plot(features1[ind], features2[ind], colorList[labelInd], label=labelList[labelInd])
+                else:
+                    plt.plot(features1[ind], features2[ind], colorList[labelInd])
+            
+            plt.xlabel(featureNames1[featureInd1])
+            plt.ylabel(featuresLabel2)
+            plt.title("Feature Comparison")
+            plt.legend()
+            # Save the Figure
+            fig.savefig(saveDataFolder + featureNames1[featureInd1] + "_" + featuresLabel2 + ".png", dpi=300, bbox_inches='tight')
+        
+            # Clear the Figure        
+            fig.clear()
+            plt.close(fig)
+            plt.cla()
+            plt.clf()   
+                
     def singleFeatureComparison(self, featureListFull, featureLabelFull, chemicalOrder, featureNames):
         # Create Directory to Save the Figures
         saveDataFolder = self.saveDataFolder + "singleChemicalFeatureComparison/"
@@ -178,7 +216,6 @@ class featureAnalysis:
         
         colorList = ['ko', 'ro', 'bo']
         labelList = ['Cold', 'Exercise', 'VR']
-        #labelList = ['Cold', 'Exercise', 'VR']
         for chemicalInd in range(len(chemicalOrder)):
             chemicalName = chemicalOrder[chemicalInd]
             featureList = featureListFull[chemicalInd]

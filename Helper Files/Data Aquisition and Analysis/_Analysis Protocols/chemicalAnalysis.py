@@ -1,5 +1,6 @@
 
 # Basic Modules
+import sys
 import math
 import numpy as np
 # Peak Detection Modules
@@ -21,13 +22,34 @@ from scipy.fft import fft, ifft
 from scipy.interpolate import UnivariateSpline
 
 from lmfit.models import GaussianModel
-from lmfit.models import SkewedGaussianModel
+from lmfit.models import SkewedGaussianModel, SkewedVoigtModel
+
+# Import Files
+import _filteringProtocols as filteringMethods # Import Files with Filtering Methods
+
 # --------------------------------------------------------------------------- #
 # --------------------------------------------------------------------------- #
 
 class signalProcessing:
     
     def __init__(self, stimulusTimes, stimulusBuffer = 500, plotData = False):
+        self.lowPassCutoff = 0.01
+        
+        self.minPeakDuration = 200
+        
+        self.minLeftBoundaryInd = 200
+        
+        self.plotData = plotData
+        
+        self.startStimulus = stimulusTimes[0]
+        self.endStimulus = stimulusTimes[1] + stimulusBuffer
+        
+        self.resetGlobalVariables()  
+        
+        # Define the Class with all the Filtering Methods
+        self.filteringMethods = filteringMethods.filteringMethods()
+    
+    def resetGlobalVariables(self):
         self.glucoseFeatures = []
         self.lactateFeatures = []
         self.uricAcidFeatures = []
@@ -36,18 +58,7 @@ class signalProcessing:
         self.featureLabelsLactate = []
         self.featureLabelsUricAcid = []
         
-        self.lowPassCutoff = 0.01
-        
-        self.minPeakDuration = 20
-        
-        self.minLeftBoundaryInd = 100
-        
-        self.plotData = plotData
-        
-        self.startStimulus = stimulusTimes[0]
-        self.endStimulus = stimulusTimes[1] + stimulusBuffer
-        
-        self.peakData = {"Lactate":[], "Glucose":[], "Uric Acid":[]}
+        self.peakData = {"Lactate":[], "Glucose":[], "Uric Acid":[]}        
     
     def analyzeData(self, xData, yData, chemicalName = ""):
         if not self.continueAnalysis:
@@ -57,9 +68,10 @@ class signalProcessing:
         # Apply a Low Pass Filter
         self.samplingFreq = len(xData)/(xData[-1] - xData[0])
         yData = self.butterFilter(yData, self.lowPassCutoff, self.samplingFreq, order = 4, filterType = 'low')
+        #yData = self.filteringMethods.filterSVD.denoise(yData, math.ceil(np.sqrt(len(yData))))
         # ------------------------------------------------------------------- #
         
-        # ------------------- Find and Remove the Baseline ------------------ #
+        # ---------------------- Find the Chemical Peak --------------------- #
         # Find Peaks in the Data
         chemicalPeakInd = self.findPeak(xData, yData)
         # Return None if No Peak Found
@@ -74,38 +86,41 @@ class signalProcessing:
         # ------------------- Find and Remove the Baseline ------------------ #
         # Get Baseline from Best Linear Fit
         leftCutInd, rightCutInd = self.findLinearBaseline(xData, yData, chemicalPeakInd)
-        if None in [leftCutInd, rightCutInd] or abs(leftCutInd - rightCutInd) < self.minPeakDuration or self.minLeftBoundaryInd + 1 >= leftCutInd:
+        if None in [leftCutInd, rightCutInd] or rightCutInd - leftCutInd < self.minPeakDuration:
             print("No Baseline Found in " + chemicalName + " Data")
-            self.plot(xData, yData, [], [], chemicalPeakInd, 0, 0, chemicalName + " NO BASELINE FOUND")
-            self.continueAnalysis = False
-            return []
+            # self.plot(xData, yData, [], [], chemicalPeakInd, 0, 0, chemicalName + " NO BASELINE FOUND")
+            # self.continueAnalysis = False
+            # return []
+            
+            leftCutInd = 250; rightCutInd = len(xData)-1
         
         # Fit Lines to Ends of Graph
         lineSlope, slopeIntercept = np.polyfit(xData[[leftCutInd, rightCutInd]], yData[[leftCutInd, rightCutInd]], 1)
         linearFit = lineSlope*xData + slopeIntercept
-        
+
         # Apply a Smoothing Function
-        yData = savgol_filter(yData, max(3, self.convertToOddInt((rightCutInd-leftCutInd)/8)), 2)  # 61/3,2
-            
+        yData = savgol_filter(yData, max(3, self.convertToOddInt((rightCutInd-leftCutInd)/8)), 2)  
+        
         # Piece Together yData's Baseline
         baseline = np.concatenate((yData[0:leftCutInd], linearFit[leftCutInd: rightCutInd+1], yData[rightCutInd+1:len(yData)]))
         # Find yData After Baseline Subtraction
         baselineData = yData - baseline
         # ------------------------------------------------------------------- #
-        
+
         # -------------------- Extract Features from Peak ------------------- #
         # Adjust the Peak's Ind After Baseline Subtraction
-        chemicalPeakInd = self.findNearbyMaximum(baselineData, chemicalPeakInd, binarySearchWindow = 4)
-        chemicalPeakInd = self.findNearbyMaximum(baselineData, chemicalPeakInd, binarySearchWindow = -4)
+        chemicalPeakInd = np.argmax(baselineData)
+        # chemicalPeakInd = self.findNearbyMaximum(baselineData, chemicalPeakInd, binarySearchWindow = 2)
+        # chemicalPeakInd = self.findNearbyMaximum(baselineData, chemicalPeakInd, binarySearchWindow = -2)
         
+        leftBaseInd = leftCutInd; rightBaseInd = rightCutInd
         # Establish New Peak Boundaries; But Dont Take Past the CutOffs (as it is Zero)
-        leftBaseInd = max(leftCutInd, self.findNearbyMinimum(baselineData, chemicalPeakInd, binarySearchWindow = -2))
-        rightBaseInd = min(rightCutInd, self.findNearbyMinimum(baselineData, chemicalPeakInd, binarySearchWindow = 2))
-        
-        if rightBaseInd - leftBaseInd  < 250:
-            print("Peak too small duration in " + chemicalName + " Data")
-            self.continueAnalysis = False
-            return []
+        # leftBaseInd = max(leftCutInd, self.findNearbyMinimum(baselineData, chemicalPeakInd, binarySearchWindow = -2))
+        # rightBaseInd = min(rightCutInd, self.findNearbyMinimum(baselineData, chemicalPeakInd, binarySearchWindow = 2))
+        # if rightBaseInd - leftBaseInd  < 200:
+        #     print("Peak too small duration in " + chemicalName + " Data")
+        #     self.continueAnalysis = False
+        #     return []
         # Extract the Features from the Data
         peakFeatures = self.extractFeatures(xData[leftBaseInd:rightBaseInd+1] - xData[leftBaseInd], baselineData[leftBaseInd:rightBaseInd+1], chemicalPeakInd-leftBaseInd, chemicalName)
         #peakFeatures = self.extractFeatures_Pointwise(xData[leftBaseInd:rightBaseInd+1] - xData[leftBaseInd], baselineData[leftBaseInd:rightBaseInd+1], chemicalPeakInd-leftBaseInd, chemicalName)
@@ -120,10 +135,13 @@ class signalProcessing:
             print("No Features Found in " + chemicalName + " Data")
             self.continueAnalysis = False
         else:  
+            # peakHeight = yData[chemicalPeakInd]
+            # peakFeatures[0].extend([peakHeight])
             self.peakData[chemicalName].append((xData[leftBaseInd:rightBaseInd+1] - xData[leftBaseInd], baselineData[leftBaseInd:rightBaseInd+1]))
+        
         return peakFeatures
     
-    def analyzeChemicals(self, timePoints, glucose, lactate, uricAcid, label, analyzeTogether):
+    def analyzeChemicals(self, timePoints, glucose, lactate, uricAcid, label, analyzeTogether = True):
         # Assert All Chemical Data is Well-Formed 
         self.continueAnalysis = True
         
@@ -180,8 +198,8 @@ class signalProcessing:
         # Seperate Out the Stimulus Window
         allProminences = allProminences[self.startStimulus < xData[peakIndices]]
         peakIndices = peakIndices[self.startStimulus < xData[peakIndices]]
-        allProminences = allProminences[self.startStimulus + self.endStimulus > xData[peakIndices]]
-        peakIndices = peakIndices[self.startStimulus + self.endStimulus > xData[peakIndices]]
+        allProminences = allProminences[self.endStimulus > xData[peakIndices]]
+        peakIndices = peakIndices[self.endStimulus > xData[peakIndices]]
 
         # If Peaks are Found
         if len(peakIndices) > 0:
@@ -310,7 +328,7 @@ class signalProcessing:
             for leftInd in range(peakInd-2, self.minLeftBoundaryInd, -1):
                 
                 # Initialize range of data to check
-                checkPeakBuffer = int((rightInd - leftInd)/4)
+                checkPeakBuffer = 0#int((rightInd - leftInd)/4)
                 xDataCut = xData[max(0, leftInd - checkPeakBuffer):rightInd + checkPeakBuffer]
                 yDataCut = yData[max(0, leftInd - checkPeakBuffer):rightInd + checkPeakBuffer]
                 
@@ -326,7 +344,7 @@ class signalProcessing:
                 # if numWrongSideOfTangent == 0 and rightInd - leftInd > self.minPeakDuration:
                 #     return (leftInd, rightInd)
                 # Define a threshold for distinguishing good/bad lines
-                maxBadPoints = int(len(linearFit)/10) # Minimum 1/6
+                maxBadPoints = int(len(linearFit)/15) # Minimum 1/6
                 if numWrongSideOfTangent < maxBadPoints and rightInd - leftInd > self.minPeakDuration:
                     goodTangentInd[numWrongSideOfTangent].append((leftInd, rightInd))
                     
@@ -360,17 +378,21 @@ class signalProcessing:
         
     def extractFeatures_Pointwise(self, xData, baselineData, peakInd, chemicalName):
         # ----------------------- Derivative Analysis ----------------------- #   
-        # Normalize the Data
-        baselineData = baselineData/baselineData[peakInd]
-        peakHeight = baselineData[peakInd]
-        xData = xData/baselineData[peakInd]
-
         # Calculate the Signal Derivatives
         velocity = np.gradient(baselineData, xData, edge_order = 2)
         # Find the Velocity Extremas
         leftVelPeakInd = self.findNearbyMaximum(velocity, peakInd, binarySearchWindow = -1) - xData[peakInd]
         rightVelPeakInd = self.findNearbyMinimum(velocity, peakInd, binarySearchWindow = 1) - xData[peakInd]
+        while rightVelPeakInd - leftVelPeakInd < 100:
+            baselineData = savgol_filter(baselineData, max(3, self.convertToOddInt(len(baselineData)/5)), 2)  # 61/3,2
+            leftVelPeakInd = self.findNearbyMaximum(velocity, peakInd, binarySearchWindow = -2) - xData[peakInd]
+            rightVelPeakInd = self.findNearbyMinimum(velocity, peakInd, binarySearchWindow = 2) - xData[peakInd]
         xData -= xData[peakInd];
+        
+        # Normalize the Data
+        baselineData = baselineData/baselineData[peakInd]
+        peakHeight = baselineData[peakInd]
+        xData = xData/baselineData[peakInd]
         
         # Fit the Data
         spl = UnivariateSpline(xData, baselineData, k=5)
@@ -384,15 +406,15 @@ class signalProcessing:
         # ------------------------------------------------------------------- #
         
         
-        plt.show()
-        plt.plot(xData, baselineData, 'k--', linewidth= 2)
-        plt.plot(xs, baselineDataFit, 'k', linewidth= 2)
-        #plt.plot(xs[peakInd], baselineDataFit[peakInd], 'bo')
-        plt.plot(xs, velocity/max(abs(velocity)), 'tab:blue')
-        plt.plot(xs, acceleration/max(abs(acceleration)), 'tab:red')
-        #plt.plot(xs[[leftVelPeakInd, rightVelPeakInd]], (velocity/max(abs(velocity)))[[leftVelPeakInd, rightVelPeakInd]], 'o')
-        plt.ylim([-1.1, 1.1])
-        plt.show()
+        # plt.show()
+        # plt.plot(xData, baselineData, 'k--', linewidth= 2)
+        # plt.plot(xs, baselineDataFit, 'k', linewidth= 2)
+        # #plt.plot(xs[peakInd], baselineDataFit[peakInd], 'bo')
+        # plt.plot(xs, velocity/max(abs(velocity)), 'tab:blue')
+        # plt.plot(xs, acceleration/max(abs(acceleration)), 'tab:red')
+        # #plt.plot(xs[[leftVelPeakInd, rightVelPeakInd]], (velocity/max(abs(velocity)))[[leftVelPeakInd, rightVelPeakInd]], 'o')
+        # plt.ylim([-1.1, 1.1])
+        # plt.show()
 
         # ----------------------- Store Peak Features ----------------------- #
         peakFeatures = []
@@ -426,39 +448,41 @@ class signalProcessing:
         # Find the Velocity Extremas
         leftStartVelSearch = self.findNearbyMinimum(velocity, 0, binarySearchWindow = 2)
         leftVelPeakInd = leftStartVelSearch + np.argmax(velocity[leftStartVelSearch:peakInd])
-        rightEndVelSearch = self.findNearbyMaximum(velocity, len(velocity)-1, binarySearchWindow = -2)
+        rightEndVelSearch = self.findNearbyMinimum(velocity, len(velocity)-1, binarySearchWindow = -2)
         rightVelPeakInd = peakInd + np.argmin(velocity[peakInd:rightEndVelSearch])
         
-        plt.show()
-        plt.plot(xData, baselineData, 'k', linewidth= 2)
-        plt.plot(xData[peakInd], baselineData[peakInd], 'bo')
-        plt.plot(xData, velocity/max(abs(velocity)), 'tab:blue')
-        plt.plot(xData, acceleration/max(abs(acceleration)), 'tab:red')
-        plt.plot(xData, thirdDeriv/max(abs(thirdDeriv)), 'tab:brown')
-        plt.plot(xData, forthDeriv/max(abs(forthDeriv)), 'tab:purple')
-        plt.plot(xData[[leftVelPeakInd, rightVelPeakInd]], (velocity/max(abs(velocity)))[[leftVelPeakInd, rightVelPeakInd]], 'o')
-        plt.ylim([-1.1, 1.1])
-        plt.show()
+        # plt.show()
+        # plt.plot(xData, baselineData, 'k', linewidth= 2)
+        # plt.plot(xData[peakInd], baselineData[peakInd], 'bo')
+        # plt.plot(xData, velocity/max(abs(velocity)), 'tab:blue')
+        # plt.plot(xData, acceleration/max(abs(acceleration)), 'tab:red')
+        # plt.plot(xData, thirdDeriv/max(abs(thirdDeriv)), 'tab:brown')
+        # plt.plot(xData, forthDeriv/max(abs(forthDeriv)), 'tab:purple')
+        # plt.plot(xData[[leftVelPeakInd, rightVelPeakInd]], (velocity/max(abs(velocity)))[[leftVelPeakInd, rightVelPeakInd]], 'o')
+        # plt.ylim([-1.1, 1.1])
+        # plt.show()
         
-        leftStartInd_Temp1 = self.findNearbyMaximum(acceleration, leftVelPeakInd, binarySearchWindow = -2)
-        leftStartInd_Temp2 = self.findNearbyMaximum(thirdDeriv, leftStartInd_Temp1, binarySearchWindow = -2)
-        # leftStartInd1 = self.findNearbyMaximum(forthDeriv, leftStartInd1, binarySearchWindow = -2)
-        leftStartInd = min(leftStartInd_Temp1, leftStartInd_Temp2)
+        leftStartInd_Temp1 = self.findNearbyMaximum(acceleration, leftVelPeakInd, binarySearchWindow = -6)
+        leftStartInd_Temp2 = self.findNearbyMaximum(thirdDeriv, leftStartInd_Temp1, binarySearchWindow = -6)
+        leftStartInd_Temp3 = self.findNearbyMaximum(forthDeriv, leftStartInd_Temp2, binarySearchWindow = -6)
+        leftStartInd_Temp4 = self.findNearbyMaximum(acceleration, leftStartInd_Temp3, binarySearchWindow = -6)
+        leftStartInd = self.findNearbyMaximum(thirdDeriv, leftStartInd_Temp4, binarySearchWindow = -6)
 
-        # rightEndInd = self.findNearbyMaximum(velocity, rightVelPeakInd, binarySearchWindow = 2)
-        rightEndInd_Temp1 = self.findNearbyMaximum(acceleration, rightVelPeakInd, binarySearchWindow = 2)
-        rightEndInd_Temp2 = self.findNearbyMinimum(thirdDeriv, rightEndInd_Temp1, binarySearchWindow = 2)
-        rightEndInd_Temp3 = self.findNearbyMaximum(forthDeriv, rightVelPeakInd, binarySearchWindow = 2)
-        rightEndInd = max(rightEndInd_Temp1, rightEndInd_Temp2, rightEndInd_Temp3)
+        rightEndInd_Temp1 = self.findNearbyMaximum(acceleration, rightVelPeakInd, binarySearchWindow = 6)
+        rightEndInd_Temp2 = self.findNearbyMinimum(thirdDeriv, rightEndInd_Temp1, binarySearchWindow = 6)
+        rightEndInd = self.findNearbyMaximum(velocity, rightEndInd_Temp2, binarySearchWindow = 6)
         
+        if rightEndInd - leftStartInd < 100:
+            leftStartInd = 0; rightEndInd = len(baselineData)
+                
         xData = xData[leftStartInd:rightEndInd].copy()
         baselineData = baselineData[leftStartInd:rightEndInd].copy()
         peakInd = peakInd - leftStartInd
+        xData -= xData[0]
         baselineData = self.gausDecomp(xData, baselineData, peakInd, chemicalName)
         if len(baselineData) == 0:
             print("Bad Gaussian Decomp")
             return []
-        xData -= xData[0]
         peakInd = np.argmax(baselineData)
         # ------------------------------------------------------------------- #
         
@@ -482,27 +506,29 @@ class signalProcessing:
         thirdDerivRightMax = self.findNearbyMaximum(thirdDeriv, peakInd, binarySearchWindow = 2)
         # ------------------------------------------------------------------- #
         
-        plt.show()
-        plt.plot(xData, baselineData, 'k', linewidth= 2)
-        plt.plot(xData[peakInd], baselineData[peakInd], 'bo')
-        plt.plot(xData, velocity/max(abs(velocity)), 'tab:blue')
-        plt.plot(xData, acceleration/max(abs(acceleration)), 'tab:red')
-        plt.plot(xData, thirdDeriv/max(abs(thirdDeriv[maxAccelLeftInd:maxAccelRightInd])), 'tab:brown')
-        plt.plot(xData, forthDeriv/max(abs(forthDeriv[maxAccelLeftInd:maxAccelRightInd])), 'tab:purple')
-        plt.plot(xData[[leftVelPeakInd, rightVelPeakInd]], (velocity/max(abs(velocity)))[[leftVelPeakInd, rightVelPeakInd]], 'o')
-        plt.plot(xData[[maxAccelLeftInd, minAccelCenterInd, maxAccelRightInd]], (acceleration/max(abs(acceleration)))[[maxAccelLeftInd, minAccelCenterInd, maxAccelRightInd]], 'o')
-        plt.plot(xData[[thirdDerivLeftMin, thirdDerivRightMax]], (thirdDeriv/max(abs(thirdDeriv[maxAccelLeftInd:maxAccelRightInd])))[[thirdDerivLeftMin, thirdDerivRightMax]], 'o')
-        plt.ylim([-1.1, 1.1])
-        plt.title(str(len(xData) - rightVelPeakInd))
-        plt.show()
+        # plt.show()
+        # plt.plot(xData, baselineData, 'k', linewidth= 2)
+        # plt.plot(xData[peakInd], baselineData[peakInd], 'ko', linewidth = 2, label = "Normalized Chemical Peak")
+        # plt.plot(xData, velocity/max(abs(velocity)), 'tab:blue', alpha = 0.8, label="First Derivative")
+        # plt.plot(xData, acceleration/max(abs(acceleration)), 'tab:red', alpha = 0.8, label = "Second Derivative")
+        # # plt.plot(xData, thirdDeriv/max(abs(thirdDeriv[maxAccelLeftInd:maxAccelRightInd])), 'tab:brown')
+        # # plt.plot(xData, forthDeriv/max(abs(forthDeriv[maxAccelLeftInd:maxAccelRightInd])), 'tab:purple')
+        # # plt.plot(xData[[leftVelPeakInd, rightVelPeakInd]], (velocity/max(abs(velocity)))[[leftVelPeakInd, rightVelPeakInd]], 'o')
+        # # plt.plot(xData[[maxAccelLeftInd, minAccelCenterInd, maxAccelRightInd]], (acceleration/max(abs(acceleration)))[[maxAccelLeftInd, minAccelCenterInd, maxAccelRightInd]], 'o')
+        # # plt.plot(xData[[thirdDerivLeftMin, thirdDerivRightMax]], (thirdDeriv/max(abs(thirdDeriv[maxAccelLeftInd:maxAccelRightInd])))[[thirdDerivLeftMin, thirdDerivRightMax]], 'o')
+        # plt.ylim([-1.1, 1.1])
+        # plt.title("Normalized Chemical Signal")
+        # plt.xlabel("Time (Seconds)")
+        # plt.ylabel("AU")
+        # plt.show()
         
         # -------------------------- Cull Bad Peaks ------------------------- #   
-        if len(xData) - rightVelPeakInd < 5:
-            print("Too Close Right Cutoff")
-            return []
-        if leftVelPeakInd < 5:
-            print("Too Close Left Cutoff")
-            return []        
+        # if len(xData) - rightVelPeakInd < 5:
+        #     print("Too Close Right Cutoff")
+        #     return []
+        # if leftVelPeakInd < 5:
+        #     print("Too Close Left Cutoff")
+        #     return []        
         # ------------------------------------------------------------------- #
         
         # ----------------------- Indivisual Analysis ----------------------- #   
@@ -535,6 +561,7 @@ class signalProcessing:
         # -------------------------- Time Features -------------------------- # 
         # Velocity Intervals
         velIntervalLeft = xData[peakInd] - xData[leftVelPeakInd]
+        accelIntervalRight = xData[minAccelCenterInd] - xData[maxAccelLeftInd]
         # ------------------------------------------------------------------- #
         
         # ------------------------ Amplitude Features ----------------------- #  
@@ -542,10 +569,11 @@ class signalProcessing:
         maxUpSlopeConc, maxDownSlopeConc = baselineData[[leftVelPeakInd, rightVelPeakInd]]
         # Amplitudes Based on the Acceleration Extremas
         maxAccelLeftIndConc, minAccelCenterIndConc, maxAccelRightIndConc = baselineData[[maxAccelLeftInd, minAccelCenterInd, maxAccelRightInd]]
-        maxAccelLeftIndAccel = acceleration[maxAccelLeftInd]
+        maxAccelLeftIndAccel, minAccelCenterIndAccel, maxAccelRightIndAccel = acceleration[[maxAccelLeftInd, minAccelCenterInd, maxAccelRightInd]]
 
         # Concentration Differences
         velDiffConc = maxUpSlopeConc - maxDownSlopeConc
+        accelDiffMax = maxAccelLeftIndAccel - maxAccelRightIndAccel
         accelDiffMaxConc = maxAccelLeftIndConc - maxAccelRightIndConc
         accelDiffRightConc = maxAccelRightIndConc - minAccelCenterIndConc
         accelDiffLeftConc = maxAccelLeftIndConc - minAccelCenterIndConc  
@@ -557,8 +585,8 @@ class signalProcessing:
 
         # -------------------------- Slope Features ------------------------- #     
         # Get Full Slope Parameters
-        upSlope_Full = np.polyfit(xData[maxAccelLeftInd:leftVelPeakInd], baselineData[maxAccelLeftInd:leftVelPeakInd], 1)
-        downSlope_Full = np.polyfit(xData[rightVelPeakInd:maxAccelRightInd], baselineData[rightVelPeakInd:maxAccelRightInd], 1)
+        upSlope_Full = np.polyfit(xData[maxAccelLeftInd:leftVelPeakInd+2], baselineData[maxAccelLeftInd:leftVelPeakInd+2], 1)
+        downSlope_Full = np.polyfit(xData[max(0, rightVelPeakInd-2):maxAccelRightInd], baselineData[max(0, rightVelPeakInd-2):maxAccelRightInd], 1)
 
         # Get Slope Features
         upSlope = upSlope_Full[0]
@@ -578,7 +606,7 @@ class signalProcessing:
         # Calculate the New Baseline of the Peak
         startBlinkX, _ = self.findLineIntersectionPoint([0, 0], upSlope_Full)
         endBlinkX, _ = self.findLineIntersectionPoint(downSlope_Full, [0, 0])
-        blinkDuration_Final = endBlinkX - startBlinkX
+        peakDuration_Final = endBlinkX - startBlinkX
         
         # Shape Parameters
         peakAverage = np.mean(baselineData[leftVelPeakInd:rightVelPeakInd+1])
@@ -600,19 +628,28 @@ class signalProcessing:
         peakFeatures = []
         # Saving Features from Section: Time
         
-        # Saving Features from Section: Amplitude Features
-        peakFeatures.extend([maxUpSlopeConc, maxDownSlopeConc])
-        peakFeatures.extend([maxAccelLeftIndConc, minAccelCenterIndConc, maxAccelRightIndConc])
-        peakFeatures.extend([maxAccelLeftIndAccel])
-        peakFeatures.extend([velDiffConc, accelDiffMaxConc, accelDiffRightConc, accelDiffLeftConc])
+        # # Saving Features from Section: Amplitude Features
+        # peakFeatures.extend([maxUpSlopeConc, maxDownSlopeConc])
+        # peakFeatures.extend([maxAccelLeftIndConc, minAccelCenterIndConc, maxAccelRightIndConc])
+        # peakFeatures.extend([maxAccelLeftIndAccel])
+        # peakFeatures.extend([velDiffConc, accelDiffMaxConc, accelDiffRightConc, accelDiffLeftConc])
         
-        # Saving Features from Section: Slope Features
-        peakFeatures.extend([upSlope, downSlope])
+        # # Saving Features from Section: Slope Features
+        # peakFeatures.extend([upSlope, downSlope])
         
-        # Saving Features from Section: Peak Shape Features
-        peakFeatures.extend([peakTentX, peakTentY, tentDeviationX, tentDeviationY, tentDeviationRatio, blinkDuration_Final])
-        peakFeatures.extend([peakAverage, peakSTD, peakSkew, peakKurtosis])
-        peakFeatures.extend([peakHeightFFT, leftVelHeightFFT,rightVelHeightFFT, peakSTD_FFT, peakEntropyFFT])
+        # # Saving Features from Section: Peak Shape Features
+        # peakFeatures.extend([peakTentX, peakTentY, tentDeviationX, tentDeviationY, tentDeviationRatio, peakDuration_Final])
+        # peakFeatures.extend([peakAverage, peakSTD, peakSkew, peakKurtosis])
+        # peakFeatures.extend([peakHeightFFT, leftVelHeightFFT,rightVelHeightFFT, peakSTD_FFT, peakEntropyFFT])
+
+        # peakFeatures.extend([accelDiffMaxConc, accelDiffLeftConc])
+        # peakFeatures.extend([maxAccelRightIndConc])
+        # peakFeatures.extend([tentDeviationX, peakTentY, tentDeviationRatio])
+        # peakFeatures.extend([peakAverage, peakSTD])
+        # peakFeatures.extend([accelDiffMax])
+        
+        # Features for the Stress Scores (GLUCOSE)
+        peakFeatures.extend([velDiffConc, accelDiffMaxConc])
 
         return peakFeatures
         # ------------------------------------------------------------------- #
@@ -664,8 +701,8 @@ class signalProcessing:
 
         # -------------------------- Slope Features ------------------------- #     
         # Get Full Slope Parameters
-        upSlope_Full = np.polyfit(xData[maxAccelLeftInd:leftVelPeakInd], baselineData[maxAccelLeftInd:leftVelPeakInd], 1)
-        downSlope_Full = np.polyfit(xData[rightVelPeakInd:maxAccelRightInd], baselineData[rightVelPeakInd:maxAccelRightInd], 1)
+        upSlope_Full = np.polyfit(xData[maxAccelLeftInd:leftVelPeakInd+2], baselineData[maxAccelLeftInd:leftVelPeakInd+2], 1)
+        downSlope_Full = np.polyfit(xData[max(0, rightVelPeakInd-2):maxAccelRightInd], baselineData[max(0, rightVelPeakInd-2):maxAccelRightInd], 1)
 
         # Get Slope Features
         upSlope = upSlope_Full[0]
@@ -687,10 +724,11 @@ class signalProcessing:
         # Calculate the New Baseline of the Peak
         startBlinkX, _ = self.findLineIntersectionPoint([0, 0], upSlope_Full)
         endBlinkX, _ = self.findLineIntersectionPoint(downSlope_Full, [0, 0])
-        blinkDuration_Final = endBlinkX - startBlinkX
+        peakDuration_Final = endBlinkX - startBlinkX
         
         # Shape Parameters
         peakAverage = np.mean(baselineData[leftVelPeakInd:rightVelPeakInd+1])
+        peakSTD = np.std(baselineData[leftVelPeakInd:rightVelPeakInd+1])
         peakEntropy = entropy(baselineData[leftVelPeakInd:rightVelPeakInd+1])
         peakSkew = skew(baselineData[leftVelPeakInd:rightVelPeakInd+1], bias=False)
         peakKurtosis = kurtosis(baselineData[leftVelPeakInd:rightVelPeakInd+1], fisher=True, bias = False)
@@ -701,9 +739,12 @@ class signalProcessing:
         leftVelHeightFFT = abs(baselineDataFFT[0])
         rightVelHeightFFT = abs(baselineDataFFT[rightVelPeakInd - leftVelPeakInd])
         
+        # plt.plot(fft(baselineData)[50:-50])
+        # plt.show()
+        
         peakSTD_FFT = np.std(baselineDataFFT, ddof=1)
         peakEntropyFFT = entropy(abs(baselineDataFFT))
-
+        peakAverage = np.mean(baselineData[leftVelPeakInd:rightVelPeakInd+1])
         
         curvature = self.calculateCurvature(xData, baselineData)
         peakCurvature, leftVelCurvature, rightVelCurvature = curvature[[peakInd, leftVelPeakInd, rightVelPeakInd]]
@@ -711,31 +752,56 @@ class signalProcessing:
 
         # ----------------------- Store Peak Features ----------------------- #
         peakFeatures = []
-        # Saving Features from Section: Time
-        peakFeatures.extend([velInterval, velIntervalLeft, velIntervalRight])
-        peakFeatures.extend([accelIntervalLeft, accelIntervalRight, accelInterval, thirdDerivInterval])
+        # # Saving Features from Section: Time
+        # peakFeatures.extend([velInterval, velIntervalLeft, velIntervalRight])
+        # peakFeatures.extend([accelIntervalLeft, accelIntervalRight, accelInterval, thirdDerivInterval])
         
-        # Saving Features from Section: Amplitude Features
-        peakFeatures.extend([maxUpSlopeConc, maxDownSlopeConc])
-        peakFeatures.extend([maxUpSlopeVel, maxDownSlopeVel])
-        peakFeatures.extend([maxAccelLeftIndConc, minAccelCenterIndConc, maxAccelRightIndConc])
-        peakFeatures.extend([maxAccelLeftIndAccel, minAccelCenterIndAccel, maxAccelRightIndAccel])
-        peakFeatures.extend([velDiffConc, accelDiffMaxConc, accelDiffRightConc, accelDiffLeftConc])
-        peakFeatures.extend([velDiff, accelDiffMax, accelDiffRight, accelDiffLeft])
-        peakFeatures.extend([leftDiffAmp, rightDiffAmp])
+        # # Saving Features from Section: Amplitude Features
+        # peakFeatures.extend([maxUpSlopeConc, maxDownSlopeConc])
+        # peakFeatures.extend([maxUpSlopeVel, maxDownSlopeVel])
+        # peakFeatures.extend([maxAccelLeftIndConc, minAccelCenterIndConc, maxAccelRightIndConc])
+        # peakFeatures.extend([maxAccelLeftIndAccel, minAccelCenterIndAccel, maxAccelRightIndAccel])
+        # peakFeatures.extend([velDiffConc, accelDiffMaxConc, accelDiffRightConc, accelDiffLeftConc])
+        # peakFeatures.extend([velDiff, accelDiffMax, accelDiffRight, accelDiffLeft])
+        # peakFeatures.extend([leftDiffAmp, rightDiffAmp])
         
-        # Saving Features from Section: Slope Features
-        peakFeatures.extend([upSlope, downSlope])
+        # # Saving Features from Section: Slope Features
+        # peakFeatures.extend([upSlope, downSlope])
         
-        # Saving Features from Section: Under the Curve Features
-        peakFeatures.extend([velToVelArea])
+        # # Saving Features from Section: Under the Curve Features
+        # peakFeatures.extend([velToVelArea])
         
-        # Saving Features from Section: Peak Shape Features
-        peakFeatures.extend([peakTentX, peakTentY, tentDeviationX, tentDeviationY, tentDeviationRatio, blinkDuration_Final])
-        peakFeatures.extend([peakAverage, peakEntropy, peakSkew, peakKurtosis])
-        peakFeatures.extend([peakHeightFFT, leftVelHeightFFT,rightVelHeightFFT, peakSTD_FFT, peakEntropyFFT])
-        peakFeatures.extend([peakCurvature, leftVelCurvature, rightVelCurvature])
-
+        # # Saving Features from Section: Peak Shape Features
+        # peakFeatures.extend([peakTentX, peakTentY, tentDeviationX, tentDeviationY, tentDeviationRatio, peakDuration_Final])
+        # peakFeatures.extend([peakAverage, peakSTD, peakEntropy, peakSkew, peakKurtosis])
+        # peakFeatures.extend([peakHeightFFT, leftVelHeightFFT,rightVelHeightFFT, peakSTD_FFT, peakEntropyFFT])
+        # peakFeatures.extend([peakCurvature, leftVelCurvature, rightVelCurvature])
+        
+        
+        
+        # peakFeatures = []
+        # peakFeatures.extend([maxDownSlopeConc, maxAccelRightIndConc, velDiffConc])
+        # peakFeatures.extend([accelDiffMaxConc, accelDiffRightConc, accelDiffMax])
+        
+        
+        
+        # peakFeatures = []
+        # peakFeatures.extend([accelDiffRight, accelDiffLeft, leftDiffAmp, rightDiffAmp, upSlope, downSlope])
+        # peakFeatures.extend([peakTentY, tentDeviationY, peakAverage, peakSTD, peakEntropy, peakSkew, peakKurtosis])
+        # peakFeatures.extend([peakHeightFFT, leftVelHeightFFT, peakCurvature, leftVelCurvature, rightVelCurvature])
+        # peakFeatures.extend([accelDiffLeftConc, accelDiffMaxConc, maxAccelLeftIndConc, maxAccelRightIndAccel])
+            
+        # peakFeatures = []            
+        # peakFeatures.extend([tentDeviationY, peakEntropy, peakAverage, peakSkew, rightVelCurvature, maxAccelRightIndAccel])
+        # peakFeatures.extend([peakKurtosis, peakHeightFFT, peakCurvature, accelDiffMaxConc, maxAccelLeftIndConc])
+        
+        
+        # Features for the Stress Scores (LACTATE)
+        peakFeatures.extend([accelDiffRightConc, rightDiffAmp])
+        
+        
+        #peakFeatures.extend([rightDiffAmp, peakHeightFFT, peakSkew, velDiffConc, maxAccelRightIndConc, accelDiffRightConc])
+        
         return peakFeatures
         # ------------------------------------------------------------------- #
         
@@ -746,6 +812,7 @@ class signalProcessing:
         thirdDerivLeftMin, thirdDerivRightMax = thirdDerivInds
 
         # -------------------------- Time Features -------------------------- # 
+        accelIntervalRight = xData[minAccelCenterInd] - xData[maxAccelLeftInd]
         # ------------------------------------------------------------------- #
         
         # ------------------------ Amplitude Features ----------------------- #  
@@ -754,9 +821,11 @@ class signalProcessing:
         maxUpSlopeVel, maxDownSlopeVel = velocity[[leftVelPeakInd, rightVelPeakInd]]
         # Amplitudes Based on the Acceleration Extremas
         maxAccelLeftIndConc, minAccelCenterIndConc, maxAccelRightIndConc = baselineData[[maxAccelLeftInd, minAccelCenterInd, maxAccelRightInd]]
+        maxAccelLeftIndAccel, minAccelCenterIndAccel, maxAccelRightIndAccel = acceleration[[maxAccelLeftInd, minAccelCenterInd, maxAccelRightInd]]
 
         # Concentration Differences
         velDiffConc = maxUpSlopeConc - maxDownSlopeConc
+        accelDiffMax = maxAccelLeftIndAccel - maxAccelRightIndAccel
         accelDiffMaxConc = maxAccelLeftIndConc - maxAccelRightIndConc
         accelDiffRightConc = maxAccelRightIndConc - minAccelCenterIndConc
         accelDiffLeftConc = maxAccelLeftIndConc - minAccelCenterIndConc
@@ -768,8 +837,8 @@ class signalProcessing:
 
         # -------------------------- Slope Features ------------------------- #     
         # Get Full Slope Parameters
-        upSlope_Full = np.polyfit(xData[maxAccelLeftInd:leftVelPeakInd], baselineData[maxAccelLeftInd:leftVelPeakInd], 1)
-        downSlope_Full = np.polyfit(xData[rightVelPeakInd:maxAccelRightInd], baselineData[rightVelPeakInd:maxAccelRightInd], 1)
+        upSlope_Full = np.polyfit(xData[maxAccelLeftInd:leftVelPeakInd+2], baselineData[maxAccelLeftInd:leftVelPeakInd+2], 1)
+        downSlope_Full = np.polyfit(xData[max(0, rightVelPeakInd-2):maxAccelRightInd], baselineData[max(0, rightVelPeakInd-2):maxAccelRightInd], 1)
 
         # Get Slope Features
         upSlope = upSlope_Full[0]
@@ -791,7 +860,7 @@ class signalProcessing:
         # Calculate the New Baseline of the Peak
         startBlinkX, _ = self.findLineIntersectionPoint([0, 0], upSlope_Full)
         endBlinkX, _ = self.findLineIntersectionPoint(downSlope_Full, [0, 0])
-        blinkDuration_Final = endBlinkX - startBlinkX
+        peakDuration_Final = endBlinkX - startBlinkX
         
         # Shape Parameters
         peakSkew = skew(baselineData[leftVelPeakInd:rightVelPeakInd+1], bias=False)
@@ -803,31 +872,43 @@ class signalProcessing:
         leftVelHeightFFT = abs(baselineDataFFT[0])
         rightVelHeightFFT = abs(baselineDataFFT[rightVelPeakInd - leftVelPeakInd])
 
-        
+        peakAverage = np.mean(baselineData[leftVelPeakInd:rightVelPeakInd+1])
         curvature = self.calculateCurvature(xData, baselineData)
         peakCurvature, leftVelCurvature, rightVelCurvature = curvature[[peakInd, leftVelPeakInd, rightVelPeakInd]]
+        
+        # Shape Parameters
+        peakEntropy = entropy(baselineData[leftVelPeakInd:rightVelPeakInd+1])
+        peakEntropy_Full = entropy(baselineData)
+        
+        # Shape Parameters FFT
+        baselineDataFFT = fft(baselineData)[leftVelPeakInd:rightVelPeakInd+1]
+        peakEntropyFFT = entropy(abs(baselineDataFFT))
+        
         # ------------------------------------------------------------------- #
 
         # ----------------------- Store Peak Features ----------------------- #
         peakFeatures = []
         # Saving Features from Section: Amplitude Features
-        peakFeatures.extend([maxUpSlopeConc, maxDownSlopeConc])
-        peakFeatures.extend([maxUpSlopeVel, maxDownSlopeVel])
-        peakFeatures.extend([maxAccelLeftIndConc, minAccelCenterIndConc, maxAccelRightIndConc])
-        peakFeatures.extend([velDiffConc, accelDiffMaxConc, accelDiffRightConc, accelDiffLeftConc])
-        peakFeatures.extend([leftDiffAmp, rightDiffAmp])
+        # peakFeatures.extend([maxUpSlopeConc, maxDownSlopeConc])
+        # peakFeatures.extend([maxUpSlopeVel, maxDownSlopeVel])
+        # peakFeatures.extend([maxAccelLeftIndConc, minAccelCenterIndConc, maxAccelRightIndConc])
+        # peakFeatures.extend([velDiffConc, accelDiffMaxConc, accelDiffRightConc, accelDiffLeftConc])
+        # peakFeatures.extend([leftDiffAmp, rightDiffAmp])
         
-        # Saving Features from Section: Slope Features
-        peakFeatures.extend([upSlope, downSlope])
+        # # Saving Features from Section: Slope Features
+        # peakFeatures.extend([upSlope, downSlope])
         
-        # Saving Features from Section: Under the Curve Features
-        peakFeatures.extend([velToVelArea])
+        # # Saving Features from Section: Under the Curve Features
+        # peakFeatures.extend([velToVelArea])
         
-        # Saving Features from Section: Peak Shape Features
-        peakFeatures.extend([peakTentX, peakTentY, tentDeviationX, tentDeviationY, tentDeviationRatio, blinkDuration_Final])
-        peakFeatures.extend([peakSkew, peakKurtosis])
-        peakFeatures.extend([peakHeightFFT, leftVelHeightFFT,rightVelHeightFFT])
-
+        # # Saving Features from Section: Peak Shape Features
+        # peakFeatures.extend([peakTentX, peakTentY, tentDeviationX, tentDeviationY, tentDeviationRatio, peakDuration_Final])
+        # peakFeatures.extend([peakSkew, peakKurtosis])
+        # peakFeatures.extend([peakHeightFFT, leftVelHeightFFT,rightVelHeightFFT])
+        
+        # Features for the Stress Scores (URIC ACID)
+        peakFeatures.extend([peakEntropy])
+        
         return peakFeatures
         # ------------------------------------------------------------------- #
 
@@ -848,60 +929,162 @@ class signalProcessing:
         plt.show()
         
         
+        
     def gaussModel(self, xData, amplitude, fwtm, center):
         sigma = fwtm/(2*math.sqrt(2*math.log(10)))
         return amplitude * np.exp(-(xData-center)**2 / (2*sigma**2))
             
     
-    def gausDecomp(self, xData, yData, peakInd, chemicalName, addExtraGauss = False):
+    def gausDecomp(self, xData, yData, peakInd, chemicalName, addExtraGauss = False, addExtraGauss2 = False, addExtraGauss3 = False):
         # https://lmfit.github.io/lmfit-py/builtin_models.html#example-1-fit-peak-data-to-gaussian-lorentzian-and-voigt-profiles
 
         peakAmp = yData[peakInd]; peakCenter = xData[peakInd];
         fwtm = xData[-1] - xData[0]
         sigma = fwtm/(2*math.sqrt(2*math.log(10)))
+        numberOfGaussians = 1
         
-        gmodel = SkewedGaussianModel()
-        finalFitInfo = gmodel.fit(yData, x=xData, amplitude=peakAmp, center=peakCenter, sigma=sigma)
+        gmodel = SkewedGaussianModel(prefix='g1_')
+        pars = gmodel.make_params()
+        pars['g1_gamma'].set(min = -200, max=200)
+        pars['g1_center'].set(min = 0)
+        pars['g1_sigma'].set(min = 0.1, max = 500)
+        pars['g1_amplitude'].set(value = 120, min= 30, max = 2000)
         
-        # # Systolic Peak Model
-        # gauss1 = Model(self.gaussModel, prefix = "chemicalPeak_")
-        # pars = gauss1.make_params()
-        # pars['chemicalPeak_center'].set(value = peakCenter, min = peakCenter*.95, max = peakCenter*1.05)
-        # pars['chemicalPeak_fwtm'].set(value = 2*peakCenter, min = peakCenter/2, max = 3*peakCenter)
-        # pars['chemicalPeak_amplitude'].set(value = peakAmp, min = peakAmp*0.95, max = peakAmp*1.05)
+        if addExtraGauss:
+            numberOfGaussians += 1
+            g2PeakInd = len(xData)-peakInd
+            peakCenter2 = xData[g2PeakInd]
+            peakAmp2 = yData[g2PeakInd]
+            
+            gmodel2 = SkewedGaussianModel(prefix='g2_')
+            pars.update(gmodel2.make_params())
+            pars['g2_gamma'].set(min = -200, max=200)
+            pars['g2_center'].set(min = 0)
+            pars['g2_sigma'].set(min = 0.01, max = 500)
+            pars['g2_amplitude'].set(value = 50, min = 20, max = 2000)
+            gmodel += gmodel2
+            
+        if addExtraGauss2:
+            numberOfGaussians += 1
+            gmodel3 =  Model(self.gaussModel, prefix = "g3_", xData = xData)
+            pars.update(gmodel3.make_params())
+            pars['g3_amplitude'].set(value = 0.9, min = 0.1, max = 1)
+            pars['g3_fwtm'].set(value = fwtm/2, min = 20, max = fwtm)
+            pars['g3_center'].set(value = peakCenter, min = 0, max = xData[-1])
+            gmodel += gmodel3
+        
+        if addExtraGauss3:
+            numberOfGaussians += 1
+            gmodel4 =  Model(self.gaussModel, prefix = "g4_", xData = xData)
+            pars.update(gmodel4.make_params())
+            pars['g4_amplitude'].set(value = 0.3, min = 0.1, max = 1)
+            pars['g4_fwtm'].set(value = fwtm/2, min = 10, max = fwtm)
+            pars['g4_center'].set(value = peakCenter, min = 0, max = xData[-1])
+            gmodel += gmodel4
+            
+        finalFitInfo = gmodel.fit(yData, pars, x=xData, method='powell')
 
-        # # Get Fit Information
-        # finalFitInfo = mod.fit(yData, pars, xData=xData, method='powell')
-        # #fitReport = finalFitInfo.fit_report(min_correl=0.6); print(fitReport)
-        
         coefficient_of_dermination = np.round(r2_score(yData, finalFitInfo.best_fit), 6)
         comps = finalFitInfo.eval_components(xData=xData)
-        
+    
+        def findBestGaus():
+            Amplitudes = []
+            for prefix in range(1, 1+numberOfGaussians):
+                prefix = 'g' + str(prefix) + '_'
+                data = finalFitInfo.eval_components(xData=xData)[prefix]
+                
+                Amplitudes.append(max(data))
+            return 'g' + str(np.argmax(Amplitudes)+1) + '_'                
+                    
         # Plot the Pulse with its Fit 
         def plotGaussianFit(xData, yData, peakInd, comps):
             xData = np.array(xData); yData = np.array(yData)
             dely = finalFitInfo.eval_uncertainty(sigma=3)
             plt.plot(xData, yData, linewidth = 2, color = "black")
             plt.plot(xData[peakInd], yData[peakInd], 'o')
-            plt.plot(xData, comps['skewed_gaussian'], '--', color = "tab:red", alpha = 0.8, label='Gaussian Fit')
+
+            plt.plot(xData, comps[findBestGaus()], '--', color = "tab:brown", alpha = 1, linewidth=4, label='Chosen Gaussian')
+            plt.plot(xData, comps['g1_'], '--', color = "tab:red", alpha = 0.8, label='Skewed Gaussian Fit')
 
             if addExtraGauss:
-                plt.plot(xData, comps['g5_'], '--', color = "tab:orange", alpha = 0.5, label='')
-            
+                plt.plot(xData, comps['g2_'], '--', color = "tab:blue", alpha = 0.5, label='Extra Skewed Gauss')
+            if addExtraGauss2:
+                plt.plot(xData, comps['g3_'], '--', color = "tab:purple", alpha = 0.5, label='Extra Gauss')
+            if addExtraGauss3:
+                plt.plot(xData, comps['g4_'], '--', color = "tab:orange", alpha = 0.5, label='Extra Gauss2')
+
             plt.fill_between(xData, finalFitInfo.best_fit-dely, finalFitInfo.best_fit+dely, color="#ABABAB",
                  label='3-$\sigma$ uncertainty band')
             
+            plt.ylim(0, 1.1)
             plt.legend(loc='best')
             plt.title("Gaussian Decomposition for " + chemicalName)
             plt.show()
         
         dely = finalFitInfo.eval_uncertainty(sigma=3)
         avUncertainty = np.round(sum(finalFitInfo.best_fit-dely)/len(dely), 5)
-        if abs(avUncertainty) < 1 and coefficient_of_dermination > 0.98: # 0.95 for coefficient_of_dermination
-            plotGaussianFit(xData, yData, peakInd, comps)
-            return comps['skewed_gaussian']
+        plotGaussianFit(xData, yData, peakInd, comps)
+        if coefficient_of_dermination > 0.992 or \
+                (coefficient_of_dermination > 0.98 and addExtraGauss) or \
+                (coefficient_of_dermination > 0.975 and addExtraGauss2) or \
+                (coefficient_of_dermination > 0.974 and addExtraGauss3):
+            bestPrefix = findBestGaus()
+            return finalFitInfo.eval_components(xData=xData)[bestPrefix]
+        elif not addExtraGauss:
+            return self.gausDecomp(xData, yData, peakInd, chemicalName, addExtraGauss = True)
+        elif not addExtraGauss2:
+            return self.gausDecomp(xData, yData, peakInd, chemicalName, addExtraGauss = True, addExtraGauss2 = True)
+        elif not addExtraGauss3:
+            return self.gausDecomp(xData, yData, peakInd, chemicalName, addExtraGauss = True, addExtraGauss2 = True, addExtraGauss3 = True)
         else:
-            return []
+            print(avUncertainty, coefficient_of_dermination)
+            return finalFitInfo.eval_components(xData=xData)[findBestGaus()] #[]
 
+        
+
+
+
+
+   
+   
+   
+   
+   
+   
+   
+   
+   
+   
+   
+   
+   
+   
+   
+   
+   
+   
+   
+   
+   
+   
+   
+   
+   
+   
+   
+   
+   
+   
+   
+   
+   
+   
+   
+   
+   
+   
+   
+   
+   
 
     

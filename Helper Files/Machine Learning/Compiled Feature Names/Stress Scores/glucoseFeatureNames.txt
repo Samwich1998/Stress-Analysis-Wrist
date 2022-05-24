@@ -1,0 +1,5 @@
+"
+peakFeatures.extend = []
+peakFeatures.extend([velDiffConc, accelDiffMaxConc])
+
+"

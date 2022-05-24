@@ -15,7 +15,7 @@ from openpyxl.styles import Font
 
 
 
-class dataProcessing:        
+class handlingExcelFormat:        
         
     def convertToXLSX(self, pulseExcelFile):
         """
@@ -62,7 +62,7 @@ class dataProcessing:
                 df = pd.read_fwf(inputFile)
                 df.drop(index=0, inplace=True) # drop the underlines
                 df.to_excel(excelFile, index=False)
-                # Load the GSR Data from the Excel File
+                # Load the Data from the Excel File
                 xlWorkbook = xl.load_workbook(excelFile, data_only=True, read_only=True)
                 xlWorksheet = xlWorkbook.worksheets[testSheetNum]
             else:
@@ -77,9 +77,9 @@ class dataProcessing:
                             xlWorksheet.append(row)    
                 # Save as New Excel File
                 xlWorkbook.save(excelFile)
-        # Else Load the GSR Data from the Excel File
+        # Else Load the Data from the Excel File
         else:
-            # Load the GSR Data from the Excel File
+            # Load the Data from the Excel File
             xlWorkbook = xl.load_workbook(excelFile, data_only=True, read_only=True)
             xlWorksheet = xlWorkbook.worksheets[testSheetNum]
         
@@ -100,6 +100,60 @@ class dataProcessing:
             cell.font = Font(color='00FF0000', italic=True, bold=True)
         
         return WB_worksheet
+
+class dataProcessing(handlingExcelFormat):
+
+    def saveResults(self, featureList, featureLabels, saveDataFolder, saveExcelName, sheetName = "Pulse Features", overwriteSave = True, dontSaveIfExcelExists = False):
+        print("Saving the Data")
+        # Create Output File Directory to Save Data: If None Exists
+        os.makedirs(saveDataFolder, exist_ok=True)
+        
+        # Path to File to Save
+        excelFile = saveDataFolder + saveExcelName
+        
+        # If You Want to Overwrite the Excel, Remove the File First (Quicker)
+        if overwriteSave and os.path.isfile(excelFile):
+            print("\tDeleting Old Excel Workbook")
+            os.remove(excelFile) 
+        
+        # If the File is Not Present: Create The Excel File
+        if not os.path.isfile(excelFile):
+            print("\tSaving the Data as New Excel Workbook")
+            # Make Excel WorkBook
+            WB = xl.Workbook()
+            WB_worksheet = WB.active 
+            WB_worksheet.title = sheetName
+        elif not dontSaveIfExcelExists:
+            print("\tExcel File Already Exists. Adding New Sheet to File")
+            WB = xl.load_workbook(excelFile, read_only=False)
+            WB_worksheet = WB.create_sheet(sheetName)
+        else:
+            print("\tNot Saving Any Data as the Excel File Already Exists")
+            return None
+    
+        # Parameters for Worksheet
+        header = featureLabels    # Header Text     
+        maxAddToExcelSheet = 1048500  # Max Rows in a Worksheet
+        
+        # Save Data to Worksheet
+        for dataStart in range(0, len(featureList), maxAddToExcelSheet):
+            # Add the Header to the Worksheet
+            WB_worksheet.append(header)
+            
+            # Add the Features to the Worksheet
+            for feature in featureList:
+                WB_worksheet.append(list(feature))
+        
+            # Add Excel Aesthetics
+            WB_worksheet = self.addExcelAesthetics(WB_worksheet)  
+            
+            # Add Sheet
+            WB_worksheet = WB.create_sheet(sheetName)
+        
+        WB.remove(WB_worksheet)
+        # Save as New Excel File
+        WB.save(excelFile)
+        WB.close()
 
     def getSavedFeatures(self, featureExcelFile):
         # Check if File Exists
@@ -137,6 +191,36 @@ class dataProcessing:
         # Finished Data Collection: Close Workbook and Return Data to User
         WB.close()
         return np.array(features)
+    
+    def extractFeatures(self, featureLabelFile, prependedString, appendToName = ''):
+        # Check if File Exists
+        if not os.path.exists(featureLabelFile):
+            print("The following Input File Does Not Exist:", featureLabelFile)
+            sys.exit()
+
+        # Get the Data
+        fullText = ''
+        with open(featureLabelFile, "r", newline='\n') as inputData:
+            inReader = csv.reader(inputData)
+            for row in inReader:
+                fullText += row[0]
+        
+        possibleFeatures = fullText.split(prependedString)
+        # Extract the Features
+        featureList = []
+        for feature in possibleFeatures:
+            feature = feature.split("[")[-1]
+            feature = feature.split("]")[0]
+            feature = feature.replace(" ", "")
+            feature = feature.split(",")
+            if len(feature) != 0:
+                featureList.extend(feature)
+        
+        featureListFull = []
+        for feature in featureList:
+            featureListFull.append(feature + appendToName)
+        
+        return featureListFull
     
 
 class processPulseData(dataProcessing):
@@ -192,59 +276,6 @@ class processPulseData(dataProcessing):
         # Finished Data Collection: Close Workbook and Return Data to User
         print("Done Data Collecting"); WB.close()
         return np.array(data["time"]), np.array(data["Capacitance"])
-
-
-    def saveResults(self, featureList, featureLabels, saveDataFolder, saveExcelName, sheetName = "Pulse Features", overwriteSave = True, dontSaveIfExcelExists = False):
-        print("Saving the Data")
-        # Create Output File Directory to Save Data: If None Exists
-        os.makedirs(saveDataFolder, exist_ok=True)
-        
-        # Path to File to Save
-        excelFile = saveDataFolder + saveExcelName
-        
-        # If You Want to Overwrite the Excel, Remove the File First (Quicker)
-        if overwriteSave and os.path.isfile(excelFile):
-            print("\tDeleting Old Excel Workbook")
-            os.remove(excelFile) 
-        
-        # If the File is Not Present: Create The Excel File
-        if not os.path.isfile(excelFile):
-            print("\tSaving the Data as New Excel Workbook")
-            # Make Excel WorkBook
-            WB = xl.Workbook()
-            WB_worksheet = WB.active 
-            WB_worksheet.title = sheetName
-        elif not dontSaveIfExcelExists:
-            print("\tExcel File Already Exists. Adding New Sheet to File")
-            WB = xl.load_workbook(excelFile, read_only=False)
-            WB_worksheet = WB.create_sheet(sheetName)
-        else:
-            print("\tNot Saving Any Data as the Excel File Already Exists")
-            return None
-    
-        # Parameters for Worksheet
-        header = featureLabels    # Header Text     
-        maxAddToExcelSheet = 1048500  # Max Rows in a Worksheet
-        
-        # Save Data to Worksheet
-        for dataStart in range(0, len(featureList), maxAddToExcelSheet):
-            # Add the Header to the Worksheet
-            WB_worksheet.append(header)
-            
-            # Add the Features to the Worksheet
-            for feature in featureList:
-                WB_worksheet.append(list(feature))
-        
-            # Add Excel Aesthetics
-            WB_worksheet = self.addExcelAesthetics(WB_worksheet)  
-            
-            # Add Sheet
-            WB_worksheet = WB.create_sheet(sheetName)
-        
-        WB.remove(WB_worksheet)
-        # Save as New Excel File
-        WB.save(excelFile)
-        WB.close()
     
     def saveFilteredData(self, time, signalData, filteredData, saveDataFolder, saveExcelName, sheetName = "Pulse Data"):
         print("Saving the Data")
@@ -281,33 +312,79 @@ class processPulseData(dataProcessing):
         # Save as New Excel File
         WB.save(excelFile)
         WB.close()
-        
-    def extractFeatures(self, pulseFeaturesFile, prependedString):
-        # Check if File Exists
-        if not os.path.exists(pulseFeaturesFile):
-            print("The following Input File Does Not Exist:", pulseFeaturesFile)
-            sys.exit()
-
-        # Get the Data
-        fullText = ''
-        with open(pulseFeaturesFile, "r", newline='\n') as inputData:
-            inReader = csv.reader(inputData)
-            for row in inReader:
-                fullText += row[0]
-        
-        possibleFeatures = fullText.split(prependedString)
-        # Extract the Features
-        featureList = []
-        for feature in possibleFeatures:
-            feature = feature.split("[")[-1]
-            feature = feature.split("]")[0]
-            feature = feature.replace(" ", "")
-            feature = feature.split(",")
-            if len(feature) != 0:
-                featureList.extend(feature)
-        
-        return featureList
     
+class processTemperatureData(dataProcessing):
+    
+    def extractTemperatureData(self, ExcelSheet, startDataCol = 1, endDataCol = 2):
+        # If Header Exists, Skip Until You Find the Data
+        for row in ExcelSheet.rows:
+            cellA = row[0]
+            if type(cellA.value) in [int, float]:
+                dataStartRow = cellA.row + 1
+                break
+        
+        # Loop Through the Excel Worksheet to collect all the data
+        timePoints = []; gsrData = [];
+        for dataRow in ExcelSheet.iter_rows(min_col=startDataCol, min_row=dataStartRow-1, max_col=endDataCol, max_row=ExcelSheet.max_row):
+            # Stop Collecting Data When there is No More
+            if dataRow[0].value == None:
+                break
+            
+            # Get Data
+            gsrData.append(float(dataRow[1].value))
+            timePoints.append(float(dataRow[0].value))
+        
+        return timePoints, gsrData
+
+    def getData(self, inputFile, testSheetNum = 0):
+        """
+        Extracts Pulse Data from Excel Document (.xlsx). Data can be in any
+        worksheet which the user can specify using 'testSheetNum' (0-indexed).
+        In the Worksheet:
+            Time Data must be in Column 'A' (x-Axis)
+            Capacitance Data must be in Column 'B' (y-Axis)
+        If No Data is present in one cell of a row, it will be read in as zero.
+        --------------------------------------------------------------------------
+        Input Variable Definitions:
+            tempFile: The Path to the Excel/TXT/CSV File Containing the GSR Data
+            testSheetNum: An Integer Representing the Excel Worksheet (0-indexed) Order.
+        --------------------------------------------------------------------------
+        """
+        # Check if File Exists
+        if not os.path.exists(inputFile):
+            print("The following Input File Does Not Exist:", inputFile)
+            sys.exit()
+            
+        # Convert to TXT and CSV Files to XLSX
+        if inputFile.endswith(".txt") or inputFile.endswith(".csv"):
+            # Extract Filename Information
+            oldFileExtension = os.path.basename(inputFile)
+            filename = os.path.splitext(oldFileExtension)[0]
+            newFilePath = os.path.dirname(inputFile) + "/Excel Files/"
+            # Make Output Folder Directory if Not Already Created
+            os.makedirs(newFilePath, exist_ok = True)
+
+            # Convert CSV or TXT to XLSX
+            excelFile = newFilePath + filename + ".xlsx"
+            xlWorkbook, chiWorksheet = self.convertToExcel(inputFile, excelFile, excelDelimiter = ",", overwriteXL = False, testSheetNum = testSheetNum)
+        # If the File is Already an Excel File, Just Load the File
+        elif inputFile.endswith(".xlsx"):
+            # Load the GSR Data from the Excel File
+            xlWorkbook = xl.load_workbook(inputFile, data_only=True, read_only=True)
+            chiWorksheet = xlWorkbook.worksheets[testSheetNum]
+        else:
+            print("The Following File is Neither CSV, TXT, Nor XLSX:", inputFile)
+        print("Extracting Data from the Excel File:", inputFile)
+        
+        # Extract Time and Current Data from the File
+        timePoints, temperature = self.extractTemperatureData(chiWorksheet)
+
+        
+        xlWorkbook.close()
+        # Finished Data Collection: Close Workbook and Return Data to User
+        print("Done Collecting GSR Data");
+        return np.array(timePoints), np.array(temperature)
+
 class processGSRData(dataProcessing):
     
     def extractCHIData_CurrentTime(self, chiWorksheet):
@@ -360,8 +437,29 @@ class processGSRData(dataProcessing):
         currentPoints = np.array(currentPoints)
         timePoints = np.array(timePoints)
         return timePoints, currentPoints
+    
+    def extractGSRData(self, ExcelSheet, startDataCol = 1, endDataCol = 2):
+        # If Header Exists, Skip Until You Find the Data
+        for row in ExcelSheet.rows:
+            cellA = row[0]
+            if type(cellA.value) in [int, float]:
+                dataStartRow = cellA.row + 1
+                break
+        
+        # Loop Through the Excel Worksheet to collect all the data
+        timePoints = []; gsrData = [];
+        for dataRow in ExcelSheet.iter_rows(min_col=startDataCol, min_row=dataStartRow-1, max_col=endDataCol, max_row=ExcelSheet.max_row):
+            # Stop Collecting Data When there is No More
+            if dataRow[0].value == None:
+                break
+            
+            # Get Data
+            gsrData.append(float(dataRow[1].value))
+            timePoints.append(float(dataRow[0].value))
+        
+        return timePoints, gsrData
 
-    def getData(self, gsrFile, testSheetNum = 0):
+    def getData(self, inputFile, testSheetNum = 0, method = "useCHI"):
         """
         Extracts Pulse Data from Excel Document (.xlsx). Data can be in any
         worksheet which the user can specify using 'testSheetNum' (0-indexed).
@@ -371,45 +469,50 @@ class processGSRData(dataProcessing):
         If No Data is present in one cell of a row, it will be read in as zero.
         --------------------------------------------------------------------------
         Input Variable Definitions:
-            gsrFile: The Path to the Excel/TXT/CSV File Containing the GSR Data
+            inputFile: The Path to the Excel/TXT/CSV File Containing the GSR Data
             testSheetNum: An Integer Representing the Excel Worksheet (0-indexed) Order.
         --------------------------------------------------------------------------
         """
         # Check if File Exists
-        if not os.path.exists(gsrFile):
-            print("The following Input File Does Not Exist:", gsrFile)
+        if not os.path.exists(inputFile):
+            print("The following Input File Does Not Exist:", inputFile)
             sys.exit()
             
         # Convert to TXT and CSV Files to XLSX
-        if gsrFile.endswith(".txt") or gsrFile.endswith(".csv"):
+        if inputFile.endswith(".txt") or inputFile.endswith(".csv"):
             # Extract Filename Information
-            oldFileExtension = os.path.basename(gsrFile)
+            oldFileExtension = os.path.basename(inputFile)
             filename = os.path.splitext(oldFileExtension)[0]
-            newFilePath = os.path.dirname(gsrFile) + "/Excel Files/"
+            newFilePath = os.path.dirname(inputFile) + "/Excel Files/"
             # Make Output Folder Directory if Not Already Created
             os.makedirs(newFilePath, exist_ok = True)
 
             # Convert CSV or TXT to XLSX
             excelFile = newFilePath + filename + ".xlsx"
-            xlWorkbook, chiWorksheet = self.convertToExcel(gsrFile, excelFile, excelDelimiter = ",", overwriteXL = False, testSheetNum = testSheetNum)
+            xlWorkbook, chiWorksheet = self.convertToExcel(inputFile, excelFile, excelDelimiter = ",", overwriteXL = False, testSheetNum = testSheetNum)
         # If the File is Already an Excel File, Just Load the File
-        elif gsrFile.endswith(".xlsx"):
+        elif inputFile.endswith(".xlsx"):
             # Load the GSR Data from the Excel File
-            xlWorkbook = xl.load_workbook(gsrFile, data_only=True, read_only=True)
+            xlWorkbook = xl.load_workbook(inputFile, data_only=True, read_only=True)
             chiWorksheet = xlWorkbook.worksheets[testSheetNum]
         else:
-            print("The Following File is Neither CSV, TXT, Nor XLSX:", gsrFile)
-        print("Extracting Data from the Excel File:", gsrFile)
+            print("The Following File is Neither CSV, TXT, Nor XLSX:", inputFile)
+        print("Extracting Data from the Excel File:", inputFile)
         
         # Extract Time and Current Data from the File
-        timePoints, currentPoints = self.extractCHIData_CurrentTime(chiWorksheet)
+        if method == 'useCHI':
+            timePoints, currentPoints = self.extractCHIData_CurrentTime(chiWorksheet)
+        elif method == 'processed':
+            timePoints, currentPoints = self.extractGSRData(chiWorksheet)
+        else:
+            exit("No Extract Method for GSR Found")
         
         xlWorkbook.close()
         # Finished Data Collection: Close Workbook and Return Data to User
         print("Done Collecting GSR Data");
-        return timePoints, currentPoints
+        return np.array(timePoints), np.array(currentPoints)
     
-    def saveResults(self, timeGSR, currentGS, saveDataFolder, saveExcelName, sheetName = "Galvanic Skin Response Data"):
+    def saveFilteredData(self, timeGSR, currentGS, saveDataFolder, saveExcelName, sheetName = "Galvanic Skin Response Data"):
         print("Saving the Data")
         # Create Output File Directory to Save Data: If Not Already Created
         os.makedirs(saveDataFolder, exist_ok=True)
@@ -479,7 +582,7 @@ class processChemicalData(dataProcessing):
             if uricAcidData != None:
                 uricAcid.append(float(uricAcidData))
         
-        return timePoints, [np.array(glucose), np.array(lactate), np.array(uricAcid)]
+        return timePoints, np.array([np.array(glucose), np.array(lactate), np.array(uricAcid)])
             
     def getData(self, chemicalFile, testSheetNum = 0):
         """
@@ -526,7 +629,7 @@ class processChemicalData(dataProcessing):
         
         xlWorkbook.close()
         # Finished Data Collection: Close Workbook and Return Data to User
-        print("Done Collecting GSR Data");
+        print("Done Collecting Chemical Data");
         return np.array(timePoints), np.array(chemicalData)
 
 class processMLData(dataProcessing):

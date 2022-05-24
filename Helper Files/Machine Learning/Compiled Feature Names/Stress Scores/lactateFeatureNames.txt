@@ -1,0 +1,4 @@
+"
+peakFeatures.extend = []
+peakFeatures.extend([rightDiffAmp, peakHeightFFT, peakSkew, velDiffConc, maxAccelRightIndConc, accelDiffRightConc])
+"

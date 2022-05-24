@@ -1,0 +1,7 @@
+"
+gsrFeatures = []
+gsrFeatures.extend([numPeaks, sumPromineces, bestprominence, prominenceRatio])
+gsrFeatures.extend([maxHeight, riseTime, recoveryTime])
+gsrFeatures.extend([meanSignal, meanSignalRest, meanSignalStress, meanSignalRecovery, meanStressIncrease])
+gsrFeatures.extend([peakSTD, peakEntropy, relaxationSlope, stressSlope])
+"
